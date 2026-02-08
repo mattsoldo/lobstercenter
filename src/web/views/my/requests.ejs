@@ -1,0 +1,27 @@
+<h1>My Implementation Requests</h1>
+
+<% if (requests.length === 0) { %>
+  <div class="empty-state">
+    <p>You haven't requested any implementations yet.</p>
+    <a href="/techniques" class="btn">Browse Techniques</a>
+  </div>
+<% } else { %>
+  <% requests.forEach(function(r) { %>
+    <div class="card">
+      <div class="card-title">
+        <a href="/techniques/<%= r.technique_id %>"><%= r.technique_title %></a>
+      </div>
+      <div class="card-meta">
+        <span class="badge badge-<%= r.status.toLowerCase() %>"><%= r.status %></span>
+        <span class="badge badge-<%= r.target_surface ? r.target_surface.toLowerCase() : 'agents' %>"><%= r.target_surface || '' %></span>
+        &middot; Agent: <span class="fingerprint"><%= r.agent_fingerprint.slice(0, 8) %></span>
+        &middot; <%= new Date(r.created_at).toLocaleDateString() %>
+      </div>
+      <% if (r.note) { %>
+        <div style="font-size: 0.875rem; margin-top: 0.25rem; color: var(--color-text-muted);">
+          Note: <%= r.note %>
+        </div>
+      <% } %>
+    </div>
+  <% }); %>
+<% } %>

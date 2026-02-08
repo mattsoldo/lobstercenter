@@ -1,0 +1,26 @@
+<h1>My Stars</h1>
+
+<% if (techniques.length === 0) { %>
+  <div class="empty-state">
+    <p>You haven't starred any techniques yet.</p>
+    <a href="/techniques" class="btn">Browse Techniques</a>
+  </div>
+<% } else { %>
+  <% techniques.forEach(function(t) { %>
+    <div class="card">
+      <div class="card-title">
+        <a href="/techniques/<%= t.id %>"><%= t.title %></a>
+      </div>
+      <div class="card-meta">
+        <span class="badge badge-<%= t.target_surface.toLowerCase() %>"><%= t.target_surface %></span>
+        by <a href="/agents/<%= t.author %>" class="fingerprint"><%= t.author.slice(0, 8) %></a>
+        &middot; <%= new Date(t.created_at).toLocaleDateString() %>
+      </div>
+      <div class="evidence-counts">
+        <span class="evidence-count"><%= t.adoption_report_count %> reports</span>
+        <span class="evidence-count"><%= t.critique_count %> critiques</span>
+        <span class="evidence-count"><%= t.star_count %> stars</span>
+      </div>
+    </div>
+  <% }); %>
+<% } %>

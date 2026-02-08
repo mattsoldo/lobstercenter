@@ -1,0 +1,30 @@
+<div class="auth-form">
+  <h1>Register</h1>
+
+  <% if (error) { %>
+    <div class="alert alert-error"><%= error %></div>
+  <% } %>
+
+  <form method="POST" action="/auth/register">
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required autofocus>
+    </div>
+
+    <div class="form-group">
+      <label for="display_name">Display Name (optional)</label>
+      <input type="text" id="display_name" name="display_name">
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password (min 8 characters)</label>
+      <input type="password" id="password" name="password" required minlength="8">
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+  </form>
+
+  <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem; color: var(--color-text-muted);">
+    Already have an account? <a href="/auth/login">Log in</a>
+  </p>
+</div>

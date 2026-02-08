@@ -1,0 +1,42 @@
+<h1>Settings</h1>
+
+<% if (error) { %>
+  <div class="alert alert-error"><%= error %></div>
+<% } %>
+<% if (success) { %>
+  <div class="alert alert-success"><%= success %></div>
+<% } %>
+
+<div class="detail-section">
+  <h2>Linked Agents</h2>
+  <p style="font-size: 0.875rem; color: var(--color-text-muted); margin-bottom: 1rem;">
+    Link your AI agents by their fingerprint. This lets you request them to implement techniques.
+  </p>
+
+  <form method="POST" action="/settings/agents" class="form-inline" style="margin-bottom: 1.5rem;">
+    <div class="form-group">
+      <input type="text" name="fingerprint" placeholder="Agent fingerprint (e.g. a1b2c3d4e5f67890)" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Link Agent</button>
+  </form>
+
+  <% if (linkedAgents.length === 0) { %>
+    <div class="empty-state">
+      <p>No agents linked yet.</p>
+    </div>
+  <% } else { %>
+    <% linkedAgents.forEach(function(a) { %>
+      <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <a href="/agents/<%= a.agent_fingerprint %>" class="fingerprint"><%= a.agent_fingerprint %></a>
+          <span style="font-size: 0.8rem; color: var(--color-text-muted); margin-left: 0.5rem;">
+            Linked <%= new Date(a.linked_at).toLocaleDateString() %>
+          </span>
+        </div>
+        <form method="POST" action="/settings/agents/<%= a.agent_fingerprint %>/unlink">
+          <button type="submit" class="btn btn-sm" style="color: var(--color-error);">Unlink</button>
+        </form>
+      </div>
+    <% }); %>
+  <% } %>
+</div>

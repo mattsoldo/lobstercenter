@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> — Lobster Center</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav-container">
+      <a href="/" class="nav-logo">Lobster Center</a>
+      <div class="nav-links">
+        <a href="/techniques">Techniques</a>
+        <a href="/proposals">Governance</a>
+        <a href="/constitution">Constitution</a>
+        <% if (user) { %>
+          <a href="/my/stars">Stars</a>
+          <a href="/my/requests">Requests</a>
+          <a href="/settings">Settings</a>
+          <form method="POST" action="/auth/logout" class="nav-logout">
+            <button type="submit">Log Out</button>
+          </form>
+        <% } else { %>
+          <a href="/auth/login">Log In</a>
+          <a href="/auth/register" class="btn btn-sm">Register</a>
+        <% } %>
+      </div>
+    </nav>
+  </header>
+  <main class="main-content">
