@@ -31,7 +31,7 @@ router.post('/login', async (req: Request, res: Response) => {
     const account = await humanService.authenticate(email, password);
     req.session.humanId = account.id;
     req.session.email = account.email;
-    req.session.displayName = account.display_name;
+    req.session.displayName = account.displayName;
     res.redirect(redirect || '/');
   } catch {
     res.render('auth/login', {
@@ -73,7 +73,7 @@ router.post('/register', async (req: Request, res: Response) => {
     const account = await humanService.createAccount(email, password, display_name || null);
     req.session.humanId = account.id;
     req.session.email = account.email;
-    req.session.displayName = account.display_name;
+    req.session.displayName = account.displayName;
     res.redirect('/');
   } catch (err: unknown) {
     const message = err instanceof Error && 'code' in err && (err as { code: string }).code === 'EMAIL_TAKEN'

@@ -1,55 +1,79 @@
-import { pool } from '../db/pool.js';
+import { eq, and, desc, count } from 'drizzle-orm';
+import { db } from '../db/pool.js';
+import { techniqueStars, techniques } from '../db/schema.js';
 import { AppError } from '../middleware/error.js';
 import type { TechniqueStar } from '../types.js';
 
 export async function toggleStar(humanId: string, techniqueId: string): Promise<boolean> {
   // Check technique exists
-  const technique = await pool.query('SELECT id FROM techniques WHERE id = $1', [techniqueId]);
-  if (technique.rows.length === 0) {
+  const technique = await db
+    .select({ id: techniques.id })
+    .from(techniques)
+    .where(eq(techniques.id, techniqueId));
+
+  if (technique.length === 0) {
     throw new AppError('TECHNIQUE_NOT_FOUND', 'Technique not found', 404);
   }
 
   // Check if already starred
-  const existing = await pool.query(
-    'SELECT 1 FROM technique_stars WHERE human_id = $1 AND technique_id = $2',
-    [humanId, techniqueId]
-  );
-
-  if (existing.rows.length > 0) {
-    await pool.query(
-      'DELETE FROM technique_stars WHERE human_id = $1 AND technique_id = $2',
-      [humanId, techniqueId]
+  const existing = await db
+    .select({ humanId: techniqueStars.humanId })
+    .from(techniqueStars)
+    .where(
+      and(
+        eq(techniqueStars.humanId, humanId),
+        eq(techniqueStars.techniqueId, techniqueId)
+      )
     );
+
+  if (existing.length > 0) {
+    await db
+      .delete(techniqueStars)
+      .where(
+        and(
+          eq(techniqueStars.humanId, humanId),
+          eq(techniqueStars.techniqueId, techniqueId)
+        )
+      );
     return false; // unstarred
   }
 
-  await pool.query(
-    'INSERT INTO technique_stars (human_id, technique_id) VALUES ($1, $2)',
-    [humanId, techniqueId]
-  );
+  await db
+    .insert(techniqueStars)
+    .values({ humanId, techniqueId });
+
   return true; // starred
 }
 
 export async function getStarredTechniques(humanId: string): Promise<TechniqueStar[]> {
-  const { rows } = await pool.query<TechniqueStar>(
-    'SELECT * FROM technique_stars WHERE human_id = $1 ORDER BY created_at DESC',
-    [humanId]
-  );
+  const rows = await db
+    .select()
+    .from(techniqueStars)
+    .where(eq(techniqueStars.humanId, humanId))
+    .orderBy(desc(techniqueStars.createdAt));
+
   return rows;
 }
 
 export async function isStarred(humanId: string, techniqueId: string): Promise<boolean> {
-  const { rows } = await pool.query(
-    'SELECT 1 FROM technique_stars WHERE human_id = $1 AND technique_id = $2',
-    [humanId, techniqueId]
-  );
+  const rows = await db
+    .select({ humanId: techniqueStars.humanId })
+    .from(techniqueStars)
+    .where(
+      and(
+        eq(techniqueStars.humanId, humanId),
+        eq(techniqueStars.techniqueId, techniqueId)
+      )
+    );
+
   return rows.length > 0;
 }
 
 export async function getStarCount(techniqueId: string): Promise<number> {
-  const { rows } = await pool.query(
-    'SELECT COUNT(*) AS count FROM technique_stars WHERE technique_id = $1',
-    [techniqueId]
-  );
-  return parseInt(rows[0].count, 10);
+  const [result] = await db
+    .select({ count: count() })
+    .from(techniqueStars)
+    .where(eq(techniqueStars.techniqueId, techniqueId));
+
+  return result.count;
 }

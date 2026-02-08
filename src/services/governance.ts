@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { pool } from '../db/pool.js';
+import { eq, desc, asc, sql, and, count } from 'drizzle-orm';
+import { db } from '../db/pool.js';
+import { constitutionProposals, proposalComments, proposalVotes } from '../db/schema.js';
 import { AppError } from '../middleware/error.js';
 import type {
   ConstitutionProposal,
@@ -27,14 +29,13 @@ export async function getConstitution(): Promise<string> {
 }
 
 export async function getAmendmentHistory(): Promise<ConstitutionProposal[]> {
-  const { rows } = await pool.query<ConstitutionProposal>(
-    `SELECT id, author, title, rationale, current_text, proposed_text,
-            status, discussion_ends, voting_ends, signature, created_at, updated_at
-     FROM constitution_proposals
-     WHERE status = 'RATIFIED'
-     ORDER BY updated_at DESC`
-  );
-  return rows;
+  const rows = await db
+    .select()
+    .from(constitutionProposals)
+    .where(eq(constitutionProposals.status, 'RATIFIED'))
+    .orderBy(desc(constitutionProposals.updatedAt));
+
+  return rows as ConstitutionProposal[];
 }
 
 // --- Proposals ---
@@ -61,14 +62,19 @@ export async function createProposal(input: CreateProposalInput): Promise<Consti
     throw new AppError('INVALID_INPUT', 'Proposed text is required', 400);
   }
 
-  const { rows } = await pool.query<ConstitutionProposal>(
-    `INSERT INTO constitution_proposals (author, title, rationale, current_text, proposed_text, signature)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [author, title.trim(), rationale.trim(), current_text?.trim() || null, proposed_text.trim(), signature]
-  );
+  const rows = await db
+    .insert(constitutionProposals)
+    .values({
+      author,
+      title: title.trim(),
+      rationale: rationale.trim(),
+      currentText: current_text?.trim() || null,
+      proposedText: proposed_text.trim(),
+      signature,
+    })
+    .returning();
 
-  return rows[0];
+  return rows[0] as ConstitutionProposal;
 }
 
 interface ListProposalsParams {
@@ -82,108 +88,118 @@ interface ListProposalsParams {
 export async function listProposals(params: ListProposalsParams): Promise<{ proposals: ConstitutionProposal[]; total: number }> {
   const { status, author, sort = 'recent', limit = 20, offset = 0 } = params;
 
-  const conditions: string[] = [];
-  const values: unknown[] = [];
-  let paramIndex = 1;
-
+  // Build where conditions
+  const conditions = [];
   if (status) {
-    conditions.push(`cp.status = $${paramIndex++}`);
-    values.push(status);
+    conditions.push(eq(constitutionProposals.status, status));
   }
   if (author) {
-    conditions.push(`cp.author = $${paramIndex++}`);
-    values.push(author);
+    conditions.push(eq(constitutionProposals.author, author));
   }
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  // Count total
+  const countResult = await db
+    .select({ total: count() })
+    .from(constitutionProposals)
+    .where(whereClause);
+  const total = Number(countResult[0].total);
 
-  let orderBy: string;
+  // Build order by
+  let orderByClause;
   switch (sort) {
     case 'most_discussed':
-      orderBy = 'comment_count DESC, cp.created_at DESC';
+      orderByClause = [desc(sql`comment_count`), desc(constitutionProposals.createdAt)];
       break;
     case 'closing_soon':
-      orderBy = `COALESCE(cp.voting_ends, cp.discussion_ends, cp.created_at) ASC`;
+      orderByClause = [asc(sql`COALESCE(${constitutionProposals.votingEnds}, ${constitutionProposals.discussionEnds}, ${constitutionProposals.createdAt})`)];
       break;
     case 'recent':
     default:
-      orderBy = 'cp.created_at DESC';
+      orderByClause = [desc(constitutionProposals.createdAt)];
       break;
   }
 
-  // Count total
-  const countResult = await pool.query(
-    `SELECT COUNT(*) FROM constitution_proposals cp ${where}`,
-    values
-  );
-  const total = parseInt(countResult.rows[0].count, 10);
-
   // Fetch proposals with comment count for sorting
-  const { rows } = await pool.query<ConstitutionProposal & { comment_count: number }>(
-    `SELECT cp.*, COUNT(pc.id) AS comment_count
-     FROM constitution_proposals cp
-     LEFT JOIN proposal_comments pc ON pc.proposal_id = cp.id
-     ${where}
-     GROUP BY cp.id
-     ORDER BY ${orderBy}
-     LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
-    [...values, limit, offset]
-  );
+  const rows = await db
+    .select({
+      id: constitutionProposals.id,
+      author: constitutionProposals.author,
+      title: constitutionProposals.title,
+      rationale: constitutionProposals.rationale,
+      currentText: constitutionProposals.currentText,
+      proposedText: constitutionProposals.proposedText,
+      status: constitutionProposals.status,
+      discussionEnds: constitutionProposals.discussionEnds,
+      votingEnds: constitutionProposals.votingEnds,
+      signature: constitutionProposals.signature,
+      createdAt: constitutionProposals.createdAt,
+      updatedAt: constitutionProposals.updatedAt,
+      comment_count: count(proposalComments.id),
+    })
+    .from(constitutionProposals)
+    .leftJoin(proposalComments, eq(proposalComments.proposalId, constitutionProposals.id))
+    .where(whereClause)
+    .groupBy(constitutionProposals.id)
+    .orderBy(...orderByClause)
+    .limit(limit)
+    .offset(offset);
 
   // Auto-resolve any voting proposals whose voting period has ended
   const now = new Date();
-  for (const proposal of rows) {
-    if (proposal.status === 'VOTING' && proposal.voting_ends && new Date(proposal.voting_ends) <= now) {
+  const proposals = rows as (ConstitutionProposal & { comment_count: number })[];
+  for (const proposal of proposals) {
+    if (proposal.status === 'VOTING' && proposal.votingEnds && new Date(proposal.votingEnds) <= now) {
       const resolved = await resolveVoting(proposal.id);
       Object.assign(proposal, resolved);
     }
   }
 
-  return { proposals: rows, total };
+  return { proposals, total };
 }
 
 export async function getProposal(id: string): Promise<ConstitutionProposal & { vote_tally: { votes_for: number; votes_against: number; votes_abstain: number; comment_count: number } }> {
-  const { rows } = await pool.query<ConstitutionProposal>(
-    `SELECT * FROM constitution_proposals WHERE id = $1`,
-    [id]
-  );
+  const rows = await db
+    .select()
+    .from(constitutionProposals)
+    .where(eq(constitutionProposals.id, id));
 
   if (rows.length === 0) {
     throw new AppError('PROPOSAL_NOT_FOUND', `Proposal "${id}" not found`, 404);
   }
 
-  let proposal = rows[0];
+  let proposal = rows[0] as ConstitutionProposal;
 
   // Auto-resolve if voting period ended
   const now = new Date();
-  if (proposal.status === 'VOTING' && proposal.voting_ends && new Date(proposal.voting_ends) <= now) {
+  if (proposal.status === 'VOTING' && proposal.votingEnds && new Date(proposal.votingEnds) <= now) {
     proposal = await resolveVoting(proposal.id);
   }
 
   // Fetch vote tally
-  const tallyResult = await pool.query(
-    `SELECT
-       COALESCE(COUNT(*) FILTER (WHERE vote = 'FOR'), 0) AS votes_for,
-       COALESCE(COUNT(*) FILTER (WHERE vote = 'AGAINST'), 0) AS votes_against,
-       COALESCE(COUNT(*) FILTER (WHERE vote = 'ABSTAIN'), 0) AS votes_abstain
-     FROM proposal_votes WHERE proposal_id = $1`,
-    [id]
-  );
+  const tallyResult = await db
+    .select({
+      votes_for: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${proposalVotes.vote} = 'FOR'), 0)`,
+      votes_against: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${proposalVotes.vote} = 'AGAINST'), 0)`,
+      votes_abstain: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${proposalVotes.vote} = 'ABSTAIN'), 0)`,
+    })
+    .from(proposalVotes)
+    .where(eq(proposalVotes.proposalId, id));
 
-  const commentCountResult = await pool.query(
-    `SELECT COUNT(*) FROM proposal_comments WHERE proposal_id = $1`,
-    [id]
-  );
+  const commentCountResult = await db
+    .select({ total: count() })
+    .from(proposalComments)
+    .where(eq(proposalComments.proposalId, id));
 
-  const tally = tallyResult.rows[0];
+  const tally = tallyResult[0];
 
   return {
     ...proposal,
     vote_tally: {
-      votes_for: parseInt(tally.votes_for, 10),
-      votes_against: parseInt(tally.votes_against, 10),
-      votes_abstain: parseInt(tally.votes_abstain, 10),
-      comment_count: parseInt(commentCountResult.rows[0].count, 10),
+      votes_for: Number(tally.votes_for),
+      votes_against: Number(tally.votes_against),
+      votes_abstain: Number(tally.votes_abstain),
+      comment_count: Number(commentCountResult[0].total),
     },
   };
 }
@@ -198,10 +214,10 @@ export async function updateProposal(id: string, input: UpdateProposalInput): Pr
   const { status: newStatus, author } = input;
 
   // Fetch the current proposal
-  const { rows } = await pool.query<ConstitutionProposal>(
-    `SELECT * FROM constitution_proposals WHERE id = $1`,
-    [id]
-  );
+  const rows = await db
+    .select()
+    .from(constitutionProposals)
+    .where(eq(constitutionProposals.id, id));
 
   if (rows.length === 0) {
     throw new AppError('PROPOSAL_NOT_FOUND', `Proposal "${id}" not found`, 404);
@@ -230,7 +246,7 @@ export async function updateProposal(id: string, input: UpdateProposalInput): Pr
     if (proposal.status !== 'DISCUSSION') {
       throw new AppError('INVALID_TRANSITION', 'Can only move to VOTING from DISCUSSION', 400);
     }
-    if (proposal.discussion_ends && new Date(proposal.discussion_ends) > now) {
+    if (proposal.discussionEnds && new Date(proposal.discussionEnds) > now) {
       throw new AppError('DISCUSSION_NOT_ENDED', 'Discussion period has not ended yet', 400);
     }
   } else {
@@ -238,49 +254,51 @@ export async function updateProposal(id: string, input: UpdateProposalInput): Pr
   }
 
   // Build the update
-  let updateQuery: string;
-  let updateValues: unknown[];
+  let setClause: Record<string, unknown>;
 
   if (newStatus === 'DISCUSSION') {
     const discussionEnds = new Date(now.getTime() + DISCUSSION_PERIOD_MS);
-    updateQuery = `UPDATE constitution_proposals SET status = $1, discussion_ends = $2, updated_at = NOW() WHERE id = $3 RETURNING *`;
-    updateValues = [newStatus, discussionEnds.toISOString(), id];
+    setClause = { status: newStatus, discussionEnds, updatedAt: now };
   } else if (newStatus === 'VOTING') {
     const votingEnds = new Date(now.getTime() + VOTING_PERIOD_MS);
-    updateQuery = `UPDATE constitution_proposals SET status = $1, voting_ends = $2, updated_at = NOW() WHERE id = $3 RETURNING *`;
-    updateValues = [newStatus, votingEnds.toISOString(), id];
+    setClause = { status: newStatus, votingEnds, updatedAt: now };
   } else {
-    updateQuery = `UPDATE constitution_proposals SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
-    updateValues = [newStatus, id];
+    setClause = { status: newStatus, updatedAt: now };
   }
 
-  const result = await pool.query<ConstitutionProposal>(updateQuery, updateValues);
-  return result.rows[0];
+  const result = await db
+    .update(constitutionProposals)
+    .set(setClause)
+    .where(eq(constitutionProposals.id, id))
+    .returning();
+
+  return result[0] as ConstitutionProposal;
 }
 
 async function resolveVoting(proposalId: string): Promise<ConstitutionProposal> {
   // Get vote tally
-  const tallyResult = await pool.query(
-    `SELECT
-       COALESCE(COUNT(*) FILTER (WHERE vote = 'FOR'), 0) AS votes_for,
-       COALESCE(COUNT(*) FILTER (WHERE vote = 'AGAINST'), 0) AS votes_against
-     FROM proposal_votes WHERE proposal_id = $1`,
-    [proposalId]
-  );
+  const tallyResult = await db
+    .select({
+      votes_for: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${proposalVotes.vote} = 'FOR'), 0)`,
+      votes_against: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${proposalVotes.vote} = 'AGAINST'), 0)`,
+    })
+    .from(proposalVotes)
+    .where(eq(proposalVotes.proposalId, proposalId));
 
-  const votesFor = parseInt(tallyResult.rows[0].votes_for, 10);
-  const votesAgainst = parseInt(tallyResult.rows[0].votes_against, 10);
+  const votesFor = Number(tallyResult[0].votes_for);
+  const votesAgainst = Number(tallyResult[0].votes_against);
 
   // >50% FOR to ratify (ABSTAIN doesn't count toward the total)
   const totalDecisive = votesFor + votesAgainst;
   const newStatus: ProposalStatus = totalDecisive > 0 && votesFor > totalDecisive / 2 ? 'RATIFIED' : 'REJECTED';
 
-  const { rows } = await pool.query<ConstitutionProposal>(
-    `UPDATE constitution_proposals SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-    [newStatus, proposalId]
-  );
+  const rows = await db
+    .update(constitutionProposals)
+    .set({ status: newStatus, updatedAt: new Date() })
+    .where(eq(constitutionProposals.id, proposalId))
+    .returning();
 
-  return rows[0];
+  return rows[0] as ConstitutionProposal;
 }
 
 // --- Comments ---
@@ -299,47 +317,51 @@ export async function createComment(proposalId: string, input: CreateCommentInpu
   }
 
   // Verify proposal exists
-  const proposalResult = await pool.query(
-    `SELECT id, status FROM constitution_proposals WHERE id = $1`,
-    [proposalId]
-  );
+  const proposalRows = await db
+    .select({ id: constitutionProposals.id, status: constitutionProposals.status })
+    .from(constitutionProposals)
+    .where(eq(constitutionProposals.id, proposalId));
 
-  if (proposalResult.rows.length === 0) {
+  if (proposalRows.length === 0) {
     throw new AppError('PROPOSAL_NOT_FOUND', `Proposal "${proposalId}" not found`, 404);
   }
 
-  const proposal = proposalResult.rows[0];
+  const proposal = proposalRows[0];
   if (['RATIFIED', 'REJECTED', 'WITHDRAWN'].includes(proposal.status)) {
     throw new AppError('PROPOSAL_CLOSED', 'Cannot comment on a closed proposal', 400);
   }
 
-  const { rows } = await pool.query<ProposalComment>(
-    `INSERT INTO proposal_comments (proposal_id, author, body, signature)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [proposalId, author, body.trim(), signature]
-  );
+  const rows = await db
+    .insert(proposalComments)
+    .values({
+      proposalId,
+      author,
+      body: body.trim(),
+      signature,
+    })
+    .returning();
 
-  return rows[0];
+  return rows[0] as ProposalComment;
 }
 
 export async function listComments(proposalId: string): Promise<ProposalComment[]> {
   // Verify proposal exists
-  const proposalResult = await pool.query(
-    `SELECT id FROM constitution_proposals WHERE id = $1`,
-    [proposalId]
-  );
+  const proposalRows = await db
+    .select({ id: constitutionProposals.id })
+    .from(constitutionProposals)
+    .where(eq(constitutionProposals.id, proposalId));
 
-  if (proposalResult.rows.length === 0) {
+  if (proposalRows.length === 0) {
     throw new AppError('PROPOSAL_NOT_FOUND', `Proposal "${proposalId}" not found`, 404);
   }
 
-  const { rows } = await pool.query<ProposalComment>(
-    `SELECT * FROM proposal_comments WHERE proposal_id = $1 ORDER BY created_at ASC`,
-    [proposalId]
-  );
+  const rows = await db
+    .select()
+    .from(proposalComments)
+    .where(eq(proposalComments.proposalId, proposalId))
+    .orderBy(asc(proposalComments.createdAt));
 
-  return rows;
+  return rows as ProposalComment[];
 }
 
 // --- Votes ---
@@ -360,60 +382,72 @@ export async function castVote(proposalId: string, input: CastVoteInput): Promis
   }
 
   // Verify proposal exists and is in VOTING status
-  const proposalResult = await pool.query<ConstitutionProposal>(
-    `SELECT id, status, voting_ends FROM constitution_proposals WHERE id = $1`,
-    [proposalId]
-  );
+  const proposalRows = await db
+    .select({
+      id: constitutionProposals.id,
+      status: constitutionProposals.status,
+      votingEnds: constitutionProposals.votingEnds,
+    })
+    .from(constitutionProposals)
+    .where(eq(constitutionProposals.id, proposalId));
 
-  if (proposalResult.rows.length === 0) {
+  if (proposalRows.length === 0) {
     throw new AppError('PROPOSAL_NOT_FOUND', `Proposal "${proposalId}" not found`, 404);
   }
 
-  const proposal = proposalResult.rows[0];
+  const proposal = proposalRows[0];
   if (proposal.status !== 'VOTING') {
     throw new AppError('NOT_VOTING', 'Votes can only be cast when the proposal is in VOTING status', 400);
   }
 
   // Check if voting period has ended
-  if (proposal.voting_ends && new Date(proposal.voting_ends) <= new Date()) {
+  if (proposal.votingEnds && new Date(proposal.votingEnds) <= new Date()) {
     throw new AppError('VOTING_ENDED', 'The voting period for this proposal has ended', 400);
   }
 
   // Check for duplicate vote
-  const existingVote = await pool.query(
-    `SELECT id FROM proposal_votes WHERE proposal_id = $1 AND author = $2`,
-    [proposalId, author]
-  );
+  const existingVote = await db
+    .select({ id: proposalVotes.id })
+    .from(proposalVotes)
+    .where(and(
+      eq(proposalVotes.proposalId, proposalId),
+      eq(proposalVotes.author, author)
+    ));
 
-  if (existingVote.rows.length > 0) {
+  if (existingVote.length > 0) {
     throw new AppError('ALREADY_VOTED', 'You have already voted on this proposal', 409);
   }
 
-  const { rows } = await pool.query<ProposalVote>(
-    `INSERT INTO proposal_votes (proposal_id, author, vote, rationale, signature)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [proposalId, author, vote, rationale?.trim() || null, signature]
-  );
+  const rows = await db
+    .insert(proposalVotes)
+    .values({
+      proposalId,
+      author,
+      vote,
+      rationale: rationale?.trim() || null,
+      signature,
+    })
+    .returning();
 
-  return rows[0];
+  return rows[0] as ProposalVote;
 }
 
 export async function listVotes(proposalId: string): Promise<ProposalVote[]> {
   // Verify proposal exists
-  const proposalResult = await pool.query(
-    `SELECT id FROM constitution_proposals WHERE id = $1`,
-    [proposalId]
-  );
+  const proposalRows = await db
+    .select({ id: constitutionProposals.id })
+    .from(constitutionProposals)
+    .where(eq(constitutionProposals.id, proposalId));
 
-  if (proposalResult.rows.length === 0) {
+  if (proposalRows.length === 0) {
     throw new AppError('PROPOSAL_NOT_FOUND', `Proposal "${proposalId}" not found`, 404);
   }
 
-  const { rows } = await pool.query<ProposalVote>(
-    `SELECT * FROM proposal_votes WHERE proposal_id = $1 ORDER BY created_at ASC`,
-    [proposalId]
-  );
+  const rows = await db
+    .select()
+    .from(proposalVotes)
+    .where(eq(proposalVotes.proposalId, proposalId))
+    .orderBy(asc(proposalVotes.createdAt));
 
-  return rows;
+  return rows as ProposalVote[];
 }

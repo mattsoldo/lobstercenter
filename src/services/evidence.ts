@@ -1,4 +1,6 @@
-import { pool } from '../db/pool.js';
+import { eq, desc } from 'drizzle-orm';
+import { db } from '../db/pool.js';
+import { adoptionReports, critiques, comparativeReports, comparativeReportTechniques, techniques } from '../db/schema.js';
 import { AppError } from '../middleware/error.js';
 import type { AdoptionReport, Critique, ComparativeReport, AdoptionVerdict } from '../types.js';
 
@@ -39,32 +41,27 @@ interface CreateComparisonInput {
  * Submit an adoption report for a technique.
  */
 export async function createReport(techniqueId: string, input: CreateReportInput): Promise<AdoptionReport> {
-  // Verify technique exists
   await assertTechniqueExists(techniqueId);
   validateReportFields(input);
 
-  const result = await pool.query(
-    `INSERT INTO adoption_reports
-       (technique_id, author, changes_made, trial_duration, improvements,
-        degradations, surprises, human_noticed, human_feedback, verdict, signature)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::adoption_verdict, $11)
-     RETURNING *`,
-    [
+  const [report] = await db
+    .insert(adoptionReports)
+    .values({
       techniqueId,
-      input.author,
-      input.changes_made,
-      input.trial_duration,
-      input.improvements,
-      input.degradations,
-      input.surprises || null,
-      input.human_noticed,
-      input.human_feedback || null,
-      input.verdict,
-      input.signature,
-    ]
-  );
+      author: input.author,
+      changesMade: input.changes_made,
+      trialDuration: input.trial_duration,
+      improvements: input.improvements,
+      degradations: input.degradations,
+      surprises: input.surprises || null,
+      humanNoticed: input.human_noticed,
+      humanFeedback: input.human_feedback || null,
+      verdict: input.verdict,
+      signature: input.signature,
+    })
+    .returning();
 
-  return result.rows[0];
+  return report as unknown as AdoptionReport;
 }
 
 /**
@@ -74,23 +71,20 @@ export async function createCritique(techniqueId: string, input: CreateCritiqueI
   await assertTechniqueExists(techniqueId);
   validateCritiqueFields(input);
 
-  const result = await pool.query(
-    `INSERT INTO critiques
-       (technique_id, author, failure_scenarios, conflicts, questions, overall_analysis, signature)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING *`,
-    [
+  const [critique] = await db
+    .insert(critiques)
+    .values({
       techniqueId,
-      input.author,
-      input.failure_scenarios,
-      input.conflicts || null,
-      input.questions || null,
-      input.overall_analysis,
-      input.signature,
-    ]
-  );
+      author: input.author,
+      failureScenarios: input.failure_scenarios,
+      conflicts: input.conflicts || null,
+      questions: input.questions || null,
+      overallAnalysis: input.overall_analysis,
+      signature: input.signature,
+    })
+    .returning();
 
-  return result.rows[0];
+  return critique as unknown as Critique;
 }
 
 /**
@@ -104,37 +98,32 @@ export async function createComparison(input: CreateComparisonInput): Promise<Co
     await assertTechniqueExists(tid);
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const reportResult = await client.query(
-      `INSERT INTO comparative_reports (author, methodology, results, recommendation, signature)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [input.author, input.methodology, input.results, input.recommendation, input.signature]
-    );
-
-    const report = reportResult.rows[0];
+  const result = await db.transaction(async (tx) => {
+    const [report] = await tx
+      .insert(comparativeReports)
+      .values({
+        author: input.author,
+        methodology: input.methodology,
+        results: input.results,
+        recommendation: input.recommendation,
+        signature: input.signature,
+      })
+      .returning();
 
     // Insert join table rows
     for (const tid of input.technique_ids) {
-      await client.query(
-        `INSERT INTO comparative_report_techniques (comparative_report_id, technique_id)
-         VALUES ($1, $2)`,
-        [report.id, tid]
-      );
+      await tx
+        .insert(comparativeReportTechniques)
+        .values({
+          comparativeReportId: report.id,
+          techniqueId: tid,
+        });
     }
 
-    await client.query('COMMIT');
-
     return { ...report, technique_ids: input.technique_ids };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
+
+  return result as unknown as ComparativeReport & { technique_ids: string[] };
 }
 
 /**
@@ -143,50 +132,64 @@ export async function createComparison(input: CreateComparisonInput): Promise<Co
 export async function getEvidence(techniqueId: string) {
   await assertTechniqueExists(techniqueId);
 
-  const [reports, critiques, comparisons] = await Promise.all([
-    pool.query(
-      `SELECT * FROM adoption_reports
-       WHERE technique_id = $1
-       ORDER BY created_at DESC`,
-      [techniqueId]
-    ),
-    pool.query(
-      `SELECT * FROM critiques
-       WHERE technique_id = $1
-       ORDER BY created_at DESC`,
-      [techniqueId]
-    ),
-    pool.query(
-      `SELECT cr.*
-       FROM comparative_reports cr
-       JOIN comparative_report_techniques crt ON crt.comparative_report_id = cr.id
-       WHERE crt.technique_id = $1
-       ORDER BY cr.created_at DESC`,
-      [techniqueId]
-    ),
+  const [reports, critiqueRows, compJoinRows] = await Promise.all([
+    db
+      .select()
+      .from(adoptionReports)
+      .where(eq(adoptionReports.techniqueId, techniqueId))
+      .orderBy(desc(adoptionReports.createdAt)),
+    db
+      .select()
+      .from(critiques)
+      .where(eq(critiques.techniqueId, techniqueId))
+      .orderBy(desc(critiques.createdAt)),
+    db
+      .select({ comparativeReportId: comparativeReportTechniques.comparativeReportId })
+      .from(comparativeReportTechniques)
+      .where(eq(comparativeReportTechniques.techniqueId, techniqueId)),
   ]);
 
-  // Enrich comparisons with their technique_ids
+  // Fetch full comparative reports and enrich with technique_ids
+  const compIds = [...new Set(compJoinRows.map((r) => r.comparativeReportId))];
+
   const enrichedComparisons = await Promise.all(
-    comparisons.rows.map(async (comp) => {
-      const tids = await pool.query(
-        'SELECT technique_id FROM comparative_report_techniques WHERE comparative_report_id = $1',
-        [comp.id]
-      );
-      return { ...comp, technique_ids: tids.rows.map((r: { technique_id: string }) => r.technique_id) };
+    compIds.map(async (compId) => {
+      const [report] = await db
+        .select()
+        .from(comparativeReports)
+        .where(eq(comparativeReports.id, compId));
+
+      const tids = await db
+        .select({ techniqueId: comparativeReportTechniques.techniqueId })
+        .from(comparativeReportTechniques)
+        .where(eq(comparativeReportTechniques.comparativeReportId, compId));
+
+      return { ...report, technique_ids: tids.map((r) => r.techniqueId) };
     })
   );
 
+  // Sort comparisons by created_at descending to match original behavior
+  enrichedComparisons.sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA;
+  });
+
   return {
-    reports: reports.rows,
-    critiques: critiques.rows,
+    reports,
+    critiques: critiqueRows,
     comparisons: enrichedComparisons,
   };
 }
 
 async function assertTechniqueExists(techniqueId: string) {
-  const result = await pool.query('SELECT 1 FROM techniques WHERE id = $1', [techniqueId]);
-  if (result.rows.length === 0) {
+  const rows = await db
+    .select({ id: techniques.id })
+    .from(techniques)
+    .where(eq(techniques.id, techniqueId))
+    .limit(1);
+
+  if (rows.length === 0) {
     throw new AppError('NOT_FOUND', `No technique found with id "${techniqueId}"`, 404);
   }
 }

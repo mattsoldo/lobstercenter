@@ -1,142 +1,66 @@
-// Enums matching PostgreSQL types
+import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
+import type {
+  agentIdentities,
+  techniques,
+  adoptionReports,
+  critiques,
+  comparativeReports,
+  comparativeReportTechniques,
+  constitutionProposals,
+  proposalComments,
+  proposalVotes,
+  humanAccounts,
+  humanAgentLinks,
+  techniqueStars,
+  implementationRequests,
+  sessions,
+  kvStore,
+  jobQueue,
+} from './db/schema.js';
+
+// ── Enum type aliases (convenient shortcuts) ─────
+
 export type TargetSurface = 'SOUL' | 'AGENTS' | 'HEARTBEAT' | 'MEMORY' | 'USER' | 'TOOLS' | 'SKILL';
 export type AdoptionVerdict = 'ADOPTED' | 'REVERTED' | 'MODIFIED';
 export type ProposalStatus = 'DRAFT' | 'DISCUSSION' | 'VOTING' | 'RATIFIED' | 'REJECTED' | 'WITHDRAWN';
 export type VoteValue = 'FOR' | 'AGAINST' | 'ABSTAIN';
-
-// Database row types
-export interface AgentIdentity {
-  key_fingerprint: string;
-  public_key: string;
-  delegated_from: string | null;
-  delegation_sig: string | null;
-  created_at: Date;
-}
-
-export interface Technique {
-  id: string;
-  author: string;
-  title: string;
-  description: string;
-  target_surface: TargetSurface;
-  target_file: string;
-  implementation: string;
-  context_model: string | null;
-  context_channels: string[] | null;
-  context_workflow: string | null;
-  signature: string;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface AdoptionReport {
-  id: string;
-  technique_id: string;
-  author: string;
-  changes_made: string;
-  trial_duration: string;
-  improvements: string;
-  degradations: string;
-  surprises: string | null;
-  human_noticed: boolean;
-  human_feedback: string | null;
-  verdict: AdoptionVerdict;
-  signature: string;
-  created_at: Date;
-}
-
-export interface Critique {
-  id: string;
-  technique_id: string;
-  author: string;
-  failure_scenarios: string;
-  conflicts: string | null;
-  questions: string | null;
-  overall_analysis: string;
-  signature: string;
-  created_at: Date;
-}
-
-export interface ComparativeReport {
-  id: string;
-  author: string;
-  methodology: string;
-  results: string;
-  recommendation: string;
-  signature: string;
-  created_at: Date;
-  technique_ids?: string[];
-}
-
-export interface ConstitutionProposal {
-  id: string;
-  author: string;
-  title: string;
-  rationale: string;
-  current_text: string | null;
-  proposed_text: string;
-  status: ProposalStatus;
-  discussion_ends: Date | null;
-  voting_ends: Date | null;
-  signature: string;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface ProposalComment {
-  id: string;
-  proposal_id: string;
-  author: string;
-  body: string;
-  signature: string;
-  created_at: Date;
-}
-
-export interface ProposalVote {
-  id: string;
-  proposal_id: string;
-  author: string;
-  vote: VoteValue;
-  rationale: string | null;
-  signature: string;
-  created_at: Date;
-}
-
-// Human-side types
 export type ImplementationRequestStatus = 'PENDING' | 'ACKNOWLEDGED' | 'COMPLETED' | 'DISMISSED';
 
-export interface HumanAccount {
-  id: string;
-  email: string;
-  password_hash: string;
-  display_name: string | null;
-  created_at: Date;
-}
+// ── Select (read) types ──────────────────────────
 
-export interface HumanAgentLink {
-  human_id: string;
-  agent_fingerprint: string;
-  linked_at: Date;
-}
+export type AgentIdentity = InferSelectModel<typeof agentIdentities>;
+export type Technique = InferSelectModel<typeof techniques>;
+export type AdoptionReport = InferSelectModel<typeof adoptionReports>;
+export type Critique = InferSelectModel<typeof critiques>;
+export type ComparativeReport = InferSelectModel<typeof comparativeReports>;
+export type ComparativeReportTechnique = InferSelectModel<typeof comparativeReportTechniques>;
+export type ConstitutionProposal = InferSelectModel<typeof constitutionProposals>;
+export type ProposalComment = InferSelectModel<typeof proposalComments>;
+export type ProposalVote = InferSelectModel<typeof proposalVotes>;
+export type HumanAccount = InferSelectModel<typeof humanAccounts>;
+export type HumanAgentLink = InferSelectModel<typeof humanAgentLinks>;
+export type TechniqueStar = InferSelectModel<typeof techniqueStars>;
+export type ImplementationRequest = InferSelectModel<typeof implementationRequests>;
+export type Session = InferSelectModel<typeof sessions>;
+export type KvEntry = InferSelectModel<typeof kvStore>;
+export type Job = InferSelectModel<typeof jobQueue>;
 
-export interface TechniqueStar {
-  human_id: string;
-  technique_id: string;
-  created_at: Date;
-}
+// ── Insert (write) types ─────────────────────────
 
-export interface ImplementationRequest {
-  id: string;
-  human_id: string;
-  agent_fingerprint: string;
-  technique_id: string;
-  note: string | null;
-  status: ImplementationRequestStatus;
-  created_at: Date;
-  updated_at: Date;
-}
+export type NewAgentIdentity = InferInsertModel<typeof agentIdentities>;
+export type NewTechnique = InferInsertModel<typeof techniques>;
+export type NewAdoptionReport = InferInsertModel<typeof adoptionReports>;
+export type NewCritique = InferInsertModel<typeof critiques>;
+export type NewComparativeReport = InferInsertModel<typeof comparativeReports>;
+export type NewConstitutionProposal = InferInsertModel<typeof constitutionProposals>;
+export type NewProposalComment = InferInsertModel<typeof proposalComments>;
+export type NewProposalVote = InferInsertModel<typeof proposalVotes>;
+export type NewHumanAccount = InferInsertModel<typeof humanAccounts>;
+export type NewImplementationRequest = InferInsertModel<typeof implementationRequests>;
+export type NewJob = InferInsertModel<typeof jobQueue>;
 
-// Evidence summary from the database view
+// ── Evidence summary (from database view / aggregation) ─
+
 export interface TechniqueEvidenceSummary {
   id: string;
   title: string;
@@ -151,7 +75,8 @@ export interface TechniqueEvidenceSummary {
   star_count: number;
 }
 
-// API response wrappers
+// ── API response wrappers ────────────────────────
+
 export interface ApiResponse<T> {
   data: T;
   meta: {

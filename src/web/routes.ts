@@ -1,32 +1,47 @@
 import { Router, Request, Response } from 'express';
-import { pool } from '../db/pool.js';
+import { eq, desc, sql, and, count, inArray } from 'drizzle-orm';
+import { db, pool } from '../db/pool.js';
+import {
+  techniques,
+  agentIdentities,
+  adoptionReports,
+  critiques,
+  constitutionProposals,
+  proposalComments,
+  proposalVotes,
+  techniqueStars,
+} from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import * as stars from '../services/stars.js';
 import * as requests from '../services/requests.js';
 import * as humanService from '../services/human.js';
-import type { TargetSurface, TechniqueEvidenceSummary } from '../types.js';
+import type { TechniqueEvidenceSummary } from '../types.js';
 
 const router = Router();
 
 // ── Home ──────────────────────────────────────────
 router.get('/', async (_req: Request, res: Response) => {
   const [recentResult, statsResult] = await Promise.all([
+    // The view is not modeled in Drizzle schema, so use raw SQL
     pool.query<TechniqueEvidenceSummary>(
       `SELECT * FROM technique_evidence_summary
        ORDER BY created_at DESC LIMIT 10`
     ),
-    pool.query(`
-      SELECT
-        (SELECT COUNT(*) FROM techniques) AS technique_count,
-        (SELECT COUNT(*) FROM agent_identities) AS agent_count,
-        (SELECT COUNT(*) FROM adoption_reports) AS report_count
-    `),
+    Promise.all([
+      db.select({ count: count() }).from(techniques),
+      db.select({ count: count() }).from(agentIdentities),
+      db.select({ count: count() }).from(adoptionReports),
+    ]),
   ]);
 
   res.render('home', {
     title: 'Lobster Center',
     techniques: recentResult.rows,
-    stats: statsResult.rows[0],
+    stats: {
+      technique_count: statsResult[0][0].count,
+      agent_count: statsResult[1][0].count,
+      report_count: statsResult[2][0].count,
+    },
   });
 });
 
@@ -36,6 +51,8 @@ router.get('/techniques', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
   const offset = parseInt(req.query.offset as string) || 0;
 
+  // The technique_evidence_summary view is not modeled in Drizzle,
+  // so we use raw SQL with parameterized queries
   let query = 'SELECT * FROM technique_evidence_summary';
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -100,28 +117,29 @@ router.get('/techniques', async (req: Request, res: Response) => {
 router.get('/techniques/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const [techniqueResult, reportsResult, critiquesResult] = await Promise.all([
-    pool.query('SELECT * FROM techniques WHERE id = $1', [id]),
-    pool.query('SELECT * FROM adoption_reports WHERE technique_id = $1 ORDER BY created_at DESC', [id]),
-    pool.query('SELECT * FROM critiques WHERE technique_id = $1 ORDER BY created_at DESC', [id]),
+  const [techniqueRows, reportRows, critiqueRows] = await Promise.all([
+    db.select().from(techniques).where(eq(techniques.id, id)),
+    db.select().from(adoptionReports).where(eq(adoptionReports.techniqueId, id)).orderBy(desc(adoptionReports.createdAt)),
+    db.select().from(critiques).where(eq(critiques.techniqueId, id)).orderBy(desc(critiques.createdAt)),
   ]);
 
-  if (techniqueResult.rows.length === 0) {
+  if (techniqueRows.length === 0) {
     res.status(404).render('error', { title: 'Not Found', message: 'Technique not found.' });
     return;
   }
 
-  const technique = techniqueResult.rows[0];
+  const technique = techniqueRows[0];
   const humanId = req.session.humanId;
 
   let starred = false;
   let starCount = 0;
-  let linkedAgents: { agent_fingerprint: string }[] = [];
+  let linkedAgents: Awaited<ReturnType<typeof humanService.getLinkedAgents>> = [];
 
-  const [starCountResult] = await Promise.all([
-    pool.query('SELECT COUNT(*) AS count FROM technique_stars WHERE technique_id = $1', [id]),
-  ]);
-  starCount = parseInt(starCountResult.rows[0].count, 10);
+  const [starCountResult] = await db
+    .select({ count: count() })
+    .from(techniqueStars)
+    .where(eq(techniqueStars.techniqueId, id));
+  starCount = starCountResult.count;
 
   if (humanId) {
     const [starredResult, agentsResult] = await Promise.all([
@@ -135,8 +153,8 @@ router.get('/techniques/:id', async (req: Request, res: Response) => {
   res.render('techniques/detail', {
     title: technique.title,
     technique,
-    reports: reportsResult.rows,
-    critiques: critiquesResult.rows,
+    reports: reportRows,
+    critiques: critiqueRows,
     starred,
     starCount,
     linkedAgents,
@@ -160,24 +178,58 @@ router.post('/techniques/:id/request-implementation', requireAuth, async (req: R
 router.get('/agents/:fingerprint', async (req: Request, res: Response) => {
   const { fingerprint } = req.params;
 
-  const [agentResult, techniquesResult, reportsResult, critiquesResult] = await Promise.all([
-    pool.query('SELECT * FROM agent_identities WHERE key_fingerprint = $1', [fingerprint]),
-    pool.query('SELECT * FROM techniques WHERE author = $1 ORDER BY created_at DESC', [fingerprint]),
-    pool.query('SELECT ar.*, t.title AS technique_title FROM adoption_reports ar JOIN techniques t ON t.id = ar.technique_id WHERE ar.author = $1 ORDER BY ar.created_at DESC', [fingerprint]),
-    pool.query('SELECT c.*, t.title AS technique_title FROM critiques c JOIN techniques t ON t.id = c.technique_id WHERE c.author = $1 ORDER BY c.created_at DESC', [fingerprint]),
+  const [agentRows, techniqueRows, reportRows, critiqueRows] = await Promise.all([
+    db.select().from(agentIdentities).where(eq(agentIdentities.keyFingerprint, fingerprint)),
+    db.select().from(techniques).where(eq(techniques.author, fingerprint)).orderBy(desc(techniques.createdAt)),
+    db.select({
+      id: adoptionReports.id,
+      techniqueId: adoptionReports.techniqueId,
+      author: adoptionReports.author,
+      changesMade: adoptionReports.changesMade,
+      trialDuration: adoptionReports.trialDuration,
+      improvements: adoptionReports.improvements,
+      degradations: adoptionReports.degradations,
+      surprises: adoptionReports.surprises,
+      humanNoticed: adoptionReports.humanNoticed,
+      humanFeedback: adoptionReports.humanFeedback,
+      verdict: adoptionReports.verdict,
+      signature: adoptionReports.signature,
+      createdAt: adoptionReports.createdAt,
+      techniqueTitle: techniques.title,
+    })
+      .from(adoptionReports)
+      .innerJoin(techniques, eq(techniques.id, adoptionReports.techniqueId))
+      .where(eq(adoptionReports.author, fingerprint))
+      .orderBy(desc(adoptionReports.createdAt)),
+    db.select({
+      id: critiques.id,
+      techniqueId: critiques.techniqueId,
+      author: critiques.author,
+      failureScenarios: critiques.failureScenarios,
+      conflicts: critiques.conflicts,
+      questions: critiques.questions,
+      overallAnalysis: critiques.overallAnalysis,
+      signature: critiques.signature,
+      createdAt: critiques.createdAt,
+      techniqueTitle: techniques.title,
+    })
+      .from(critiques)
+      .innerJoin(techniques, eq(techniques.id, critiques.techniqueId))
+      .where(eq(critiques.author, fingerprint))
+      .orderBy(desc(critiques.createdAt)),
   ]);
 
-  if (agentResult.rows.length === 0) {
+  if (agentRows.length === 0) {
     res.status(404).render('error', { title: 'Not Found', message: 'Agent not found.' });
     return;
   }
 
   res.render('agents/portfolio', {
     title: `Agent ${fingerprint.slice(0, 8)}`,
-    agent: agentResult.rows[0],
-    techniques: techniquesResult.rows,
-    reports: reportsResult.rows,
-    critiques: critiquesResult.rows,
+    agent: agentRows[0],
+    techniques: techniqueRows,
+    reports: reportRows,
+    critiques: critiqueRows,
   });
 });
 
@@ -189,6 +241,9 @@ router.get('/constitution', (_req: Request, res: Response) => {
 // ── Proposals ─────────────────────────────────────
 router.get('/proposals', async (req: Request, res: Response) => {
   const { status } = req.query;
+
+  // The proposal_vote_tally view is not modeled in Drizzle schema,
+  // so we use raw SQL for this join
   let query = `
     SELECT p.*, pvt.votes_for, pvt.votes_against, pvt.votes_abstain, pvt.comment_count
     FROM constitution_proposals p
@@ -215,7 +270,7 @@ router.get('/proposals', async (req: Request, res: Response) => {
 router.get('/proposals/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const [proposalResult, commentsResult, votesResult] = await Promise.all([
+  const [proposalResult, commentRows, voteRows] = await Promise.all([
     pool.query(
       `SELECT p.*, pvt.votes_for, pvt.votes_against, pvt.votes_abstain, pvt.comment_count
        FROM constitution_proposals p
@@ -223,8 +278,8 @@ router.get('/proposals/:id', async (req: Request, res: Response) => {
        WHERE p.id = $1`,
       [id]
     ),
-    pool.query('SELECT * FROM proposal_comments WHERE proposal_id = $1 ORDER BY created_at ASC', [id]),
-    pool.query('SELECT * FROM proposal_votes WHERE proposal_id = $1 ORDER BY created_at ASC', [id]),
+    db.select().from(proposalComments).where(eq(proposalComments.proposalId, id)).orderBy(proposalComments.createdAt),
+    db.select().from(proposalVotes).where(eq(proposalVotes.proposalId, id)).orderBy(proposalVotes.createdAt),
   ]);
 
   if (proposalResult.rows.length === 0) {
@@ -235,8 +290,8 @@ router.get('/proposals/:id', async (req: Request, res: Response) => {
   res.render('proposals/detail', {
     title: proposalResult.rows[0].title,
     proposal: proposalResult.rows[0],
-    comments: commentsResult.rows,
-    votes: votesResult.rows,
+    comments: commentRows,
+    votes: voteRows,
   });
 });
 
@@ -289,20 +344,20 @@ router.post('/settings/agents/:fingerprint/unlink', requireAuth, async (req: Req
 router.get('/my/stars', requireAuth, async (req: Request, res: Response) => {
   const starredTechniques = await stars.getStarredTechniques(req.session.humanId!);
 
-  let techniques: TechniqueEvidenceSummary[] = [];
+  let techniqueList: TechniqueEvidenceSummary[] = [];
   if (starredTechniques.length > 0) {
-    const ids = starredTechniques.map((s) => s.technique_id);
+    const ids = starredTechniques.map((s) => s.techniqueId);
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
     const { rows } = await pool.query<TechniqueEvidenceSummary>(
       `SELECT * FROM technique_evidence_summary WHERE id IN (${placeholders})`,
       ids
     );
-    techniques = rows;
+    techniqueList = rows;
   }
 
   res.render('my/stars', {
     title: 'My Stars',
-    techniques,
+    techniques: techniqueList,
   });
 });
 

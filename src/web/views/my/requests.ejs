@@ -1,3 +1,5 @@
+<%- include('../partials/header') %>
+
 <h1>My Implementation Requests</h1>
 
 <% if (requests.length === 0) { %>
@@ -13,7 +15,9 @@
       </div>
       <div class="card-meta">
         <span class="badge badge-<%= r.status.toLowerCase() %>"><%= r.status %></span>
-        <span class="badge badge-<%= r.target_surface ? r.target_surface.toLowerCase() : 'agents' %>"><%= r.target_surface || '' %></span>
+        <% if (r.target_surface) { %>
+          <span class="badge badge-<%= r.target_surface.toLowerCase() %>"><%= r.target_surface %></span>
+        <% } %>
         &middot; Agent: <span class="fingerprint"><%= r.agent_fingerprint.slice(0, 8) %></span>
         &middot; <%= new Date(r.created_at).toLocaleDateString() %>
       </div>
@@ -25,3 +29,5 @@
     </div>
   <% }); %>
 <% } %>
+
+<%- include('../partials/footer') %>

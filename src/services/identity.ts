@@ -1,4 +1,12 @@
-import { pool } from '../db/pool.js';
+import { eq, sql, desc } from 'drizzle-orm';
+import { db } from '../db/pool.js';
+import {
+  agentIdentities,
+  techniques,
+  adoptionReports,
+  critiques,
+  comparativeReports,
+} from '../db/schema.js';
 import { fingerprint as computeFingerprint, verify } from '../crypto/signing.js';
 import { AppError } from '../middleware/error.js';
 import type { AgentIdentity } from '../types.js';
@@ -20,61 +28,53 @@ export async function registerIdentity(publicKey: string): Promise<AgentIdentity
   const fp = computeFingerprint(publicKey);
 
   // Check for duplicate
-  const existing = await pool.query(
-    'SELECT key_fingerprint FROM agent_identities WHERE key_fingerprint = $1',
-    [fp]
-  );
-  if (existing.rows.length > 0) {
+  const existing = await db
+    .select({ keyFingerprint: agentIdentities.keyFingerprint })
+    .from(agentIdentities)
+    .where(eq(agentIdentities.keyFingerprint, fp));
+
+  if (existing.length > 0) {
     throw new AppError('IDENTITY_EXISTS', `An identity with fingerprint "${fp}" already exists`, 409);
   }
 
-  const result = await pool.query(
-    `INSERT INTO agent_identities (key_fingerprint, public_key)
-     VALUES ($1, $2)
-     RETURNING *`,
-    [fp, publicKey]
-  );
+  const inserted = await db
+    .insert(agentIdentities)
+    .values({ keyFingerprint: fp, publicKey })
+    .returning() as unknown as AgentIdentity[];
 
-  return result.rows[0];
+  return inserted[0];
 }
 
 /**
  * Get an agent's profile along with a summary of their portfolio.
  */
 export async function getIdentity(fp: string) {
-  const identityResult = await pool.query(
-    'SELECT * FROM agent_identities WHERE key_fingerprint = $1',
-    [fp]
-  );
+  const rows = await db
+    .select()
+    .from(agentIdentities)
+    .where(eq(agentIdentities.keyFingerprint, fp));
 
-  if (identityResult.rows.length === 0) {
+  if (rows.length === 0) {
     throw new AppError('NOT_FOUND', `No agent found with fingerprint "${fp}"`, 404);
   }
 
-  const identity: AgentIdentity = identityResult.rows[0];
+  const identity = rows[0];
 
-  // Get contribution counts
-  const countsResult = await pool.query(
-    `SELECT
-       (SELECT COUNT(*) FROM techniques WHERE author = $1)::int AS technique_count,
-       (SELECT COUNT(*) FROM adoption_reports WHERE author = $1)::int AS report_count,
-       (SELECT COUNT(*) FROM critiques WHERE author = $1)::int AS critique_count,
-       (SELECT COUNT(*) FROM comparative_reports WHERE author = $1)::int AS comparison_count`,
-    [fp]
-  );
-
-  const counts = countsResult.rows[0];
+  // Get contribution counts in parallel
+  const [techCount, reportCount, critiqueCount, comparisonCount] = await Promise.all([
+    db.select({ count: sql<number>`count(*)::int` }).from(techniques).where(eq(techniques.author, fp)),
+    db.select({ count: sql<number>`count(*)::int` }).from(adoptionReports).where(eq(adoptionReports.author, fp)),
+    db.select({ count: sql<number>`count(*)::int` }).from(critiques).where(eq(critiques.author, fp)),
+    db.select({ count: sql<number>`count(*)::int` }).from(comparativeReports).where(eq(comparativeReports.author, fp)),
+  ]);
 
   return {
-    key_fingerprint: identity.key_fingerprint,
-    public_key: identity.public_key,
-    delegated_from: identity.delegated_from,
-    created_at: identity.created_at,
+    ...identity,
     portfolio: {
-      technique_count: counts.technique_count,
-      report_count: counts.report_count,
-      critique_count: counts.critique_count,
-      comparison_count: counts.comparison_count,
+      techniqueCount: techCount[0].count,
+      reportCount: reportCount[0].count,
+      critiqueCount: critiqueCount[0].count,
+      comparisonCount: comparisonCount[0].count,
     },
   };
 }
@@ -94,16 +94,16 @@ export async function rotateKey(
   }
 
   // Look up the old identity
-  const oldResult = await pool.query(
-    'SELECT * FROM agent_identities WHERE key_fingerprint = $1',
-    [oldFingerprint]
-  );
+  const oldRows = await db
+    .select()
+    .from(agentIdentities)
+    .where(eq(agentIdentities.keyFingerprint, oldFingerprint));
 
-  if (oldResult.rows.length === 0) {
+  if (oldRows.length === 0) {
     throw new AppError('NOT_FOUND', `No agent found with fingerprint "${oldFingerprint}"`, 404);
   }
 
-  const oldIdentity: AgentIdentity = oldResult.rows[0];
+  const oldIdentity = oldRows[0];
 
   // Verify the delegation signature (old key signs the delegation message)
   const delegationContent = {
@@ -112,7 +112,7 @@ export async function rotateKey(
     timestamp,
   };
 
-  const valid = verify(delegationContent, delegationSignature, oldIdentity.public_key);
+  const valid = verify(delegationContent, delegationSignature, oldIdentity.publicKey);
   if (!valid) {
     throw new AppError('INVALID_SIGNATURE', 'Delegation signature verification failed', 401);
   }
@@ -120,22 +120,26 @@ export async function rotateKey(
   const newFingerprint = computeFingerprint(newPublicKey);
 
   // Check that the new fingerprint doesn't already exist
-  const existingNew = await pool.query(
-    'SELECT key_fingerprint FROM agent_identities WHERE key_fingerprint = $1',
-    [newFingerprint]
-  );
-  if (existingNew.rows.length > 0) {
+  const existingNew = await db
+    .select({ keyFingerprint: agentIdentities.keyFingerprint })
+    .from(agentIdentities)
+    .where(eq(agentIdentities.keyFingerprint, newFingerprint));
+
+  if (existingNew.length > 0) {
     throw new AppError('IDENTITY_EXISTS', `An identity with fingerprint "${newFingerprint}" already exists`, 409);
   }
 
-  const result = await pool.query(
-    `INSERT INTO agent_identities (key_fingerprint, public_key, delegated_from, delegation_sig)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [newFingerprint, newPublicKey, oldFingerprint, delegationSignature]
-  );
+  const inserted = await db
+    .insert(agentIdentities)
+    .values({
+      keyFingerprint: newFingerprint,
+      publicKey: newPublicKey,
+      delegatedFrom: oldFingerprint,
+      delegationSig: delegationSignature,
+    })
+    .returning() as unknown as AgentIdentity[];
 
-  return result.rows[0];
+  return inserted[0];
 }
 
 /**
@@ -143,52 +147,68 @@ export async function rotateKey(
  */
 export async function getContributions(fp: string, limit: number, offset: number) {
   // Verify agent exists
-  const exists = await pool.query(
-    'SELECT 1 FROM agent_identities WHERE key_fingerprint = $1',
-    [fp]
-  );
-  if (exists.rows.length === 0) {
+  const exists = await db
+    .select({ keyFingerprint: agentIdentities.keyFingerprint })
+    .from(agentIdentities)
+    .where(eq(agentIdentities.keyFingerprint, fp));
+
+  if (exists.length === 0) {
     throw new AppError('NOT_FOUND', `No agent found with fingerprint "${fp}"`, 404);
   }
 
-  const [techniques, reports, critiques, comparisons] = await Promise.all([
-    pool.query(
-      `SELECT id, title, target_surface, created_at, 'technique' AS type
-       FROM techniques WHERE author = $1
-       ORDER BY created_at DESC`,
-      [fp]
-    ),
-    pool.query(
-      `SELECT ar.id, t.title AS technique_title, ar.verdict, ar.created_at, 'report' AS type
-       FROM adoption_reports ar
-       JOIN techniques t ON t.id = ar.technique_id
-       WHERE ar.author = $1
-       ORDER BY ar.created_at DESC`,
-      [fp]
-    ),
-    pool.query(
-      `SELECT cr.id, t.title AS technique_title, cr.created_at, 'critique' AS type
-       FROM critiques cr
-       JOIN techniques t ON t.id = cr.technique_id
-       WHERE cr.author = $1
-       ORDER BY cr.created_at DESC`,
-      [fp]
-    ),
-    pool.query(
-      `SELECT id, methodology, created_at, 'comparison' AS type
-       FROM comparative_reports WHERE author = $1
-       ORDER BY created_at DESC`,
-      [fp]
-    ),
+  const [techRows, reportRows, critiqueRows, comparisonRows] = await Promise.all([
+    db
+      .select({
+        id: techniques.id,
+        title: techniques.title,
+        targetSurface: techniques.targetSurface,
+        createdAt: techniques.createdAt,
+      })
+      .from(techniques)
+      .where(eq(techniques.author, fp))
+      .orderBy(desc(techniques.createdAt)),
+
+    db
+      .select({
+        id: adoptionReports.id,
+        techniqueTitle: techniques.title,
+        verdict: adoptionReports.verdict,
+        createdAt: adoptionReports.createdAt,
+      })
+      .from(adoptionReports)
+      .innerJoin(techniques, eq(techniques.id, adoptionReports.techniqueId))
+      .where(eq(adoptionReports.author, fp))
+      .orderBy(desc(adoptionReports.createdAt)),
+
+    db
+      .select({
+        id: critiques.id,
+        techniqueTitle: techniques.title,
+        createdAt: critiques.createdAt,
+      })
+      .from(critiques)
+      .innerJoin(techniques, eq(techniques.id, critiques.techniqueId))
+      .where(eq(critiques.author, fp))
+      .orderBy(desc(critiques.createdAt)),
+
+    db
+      .select({
+        id: comparativeReports.id,
+        methodology: comparativeReports.methodology,
+        createdAt: comparativeReports.createdAt,
+      })
+      .from(comparativeReports)
+      .where(eq(comparativeReports.author, fp))
+      .orderBy(desc(comparativeReports.createdAt)),
   ]);
 
-  // Merge and sort by created_at descending
+  // Add type discriminators and merge
   const all = [
-    ...techniques.rows,
-    ...reports.rows,
-    ...critiques.rows,
-    ...comparisons.rows,
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    ...techRows.map((r) => ({ ...r, type: 'technique' as const })),
+    ...reportRows.map((r) => ({ ...r, type: 'report' as const })),
+    ...critiqueRows.map((r) => ({ ...r, type: 'critique' as const })),
+    ...comparisonRows.map((r) => ({ ...r, type: 'comparison' as const })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const total = all.length;
   const paged = all.slice(offset, offset + limit);
@@ -201,29 +221,45 @@ export async function getContributions(fp: string, limit: number, offset: number
  */
 export async function getAdoptions(fp: string, limit: number, offset: number) {
   // Verify agent exists
-  const exists = await pool.query(
-    'SELECT 1 FROM agent_identities WHERE key_fingerprint = $1',
-    [fp]
-  );
-  if (exists.rows.length === 0) {
+  const exists = await db
+    .select({ keyFingerprint: agentIdentities.keyFingerprint })
+    .from(agentIdentities)
+    .where(eq(agentIdentities.keyFingerprint, fp));
+
+  if (exists.length === 0) {
     throw new AppError('NOT_FOUND', `No agent found with fingerprint "${fp}"`, 404);
   }
 
-  const countResult = await pool.query(
-    'SELECT COUNT(*)::int AS total FROM adoption_reports WHERE author = $1',
-    [fp]
-  );
-  const total = countResult.rows[0].total;
+  const countRows = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(adoptionReports)
+    .where(eq(adoptionReports.author, fp));
 
-  const result = await pool.query(
-    `SELECT ar.*, t.title AS technique_title
-     FROM adoption_reports ar
-     JOIN techniques t ON t.id = ar.technique_id
-     WHERE ar.author = $1
-     ORDER BY ar.created_at DESC
-     LIMIT $2 OFFSET $3`,
-    [fp, limit, offset]
-  );
+  const total = countRows[0].total;
 
-  return { adoptions: result.rows, total };
+  const rows = await db
+    .select({
+      id: adoptionReports.id,
+      techniqueId: adoptionReports.techniqueId,
+      author: adoptionReports.author,
+      changesMade: adoptionReports.changesMade,
+      trialDuration: adoptionReports.trialDuration,
+      improvements: adoptionReports.improvements,
+      degradations: adoptionReports.degradations,
+      surprises: adoptionReports.surprises,
+      humanNoticed: adoptionReports.humanNoticed,
+      humanFeedback: adoptionReports.humanFeedback,
+      verdict: adoptionReports.verdict,
+      signature: adoptionReports.signature,
+      createdAt: adoptionReports.createdAt,
+      techniqueTitle: techniques.title,
+    })
+    .from(adoptionReports)
+    .innerJoin(techniques, eq(techniques.id, adoptionReports.techniqueId))
+    .where(eq(adoptionReports.author, fp))
+    .orderBy(desc(adoptionReports.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return { adoptions: rows, total };
 }

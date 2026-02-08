@@ -31,14 +31,17 @@ This document tracks the major technical decisions made during development.
 
 ---
 
-## Decision 3: Database — PostgreSQL with Raw SQL via `pg`
+## Decision 3: Database — PostgreSQL with Drizzle ORM
 
-**Choice:** Use `pg` driver directly with raw SQL queries, no ORM
+**Choice:** Drizzle ORM over PostgreSQL via the `pg` driver
 **Rationale:**
-- The schema is already well-defined in `schema.sql`
-- Full-text search and PostgreSQL-specific features (enums, GIN indexes, views) are easier with raw SQL
-- ORMs add abstraction that doesn't help when the schema is this specific
-- Migrations managed as numbered `.sql` files
+- Drizzle is the most SQL-native TypeScript ORM — it stays close to PostgreSQL's actual SQL
+- Full support for PostgreSQL-specific features: custom enums, arrays, GIN indexes, jsonb, full-text search (via `sql` template tags)
+- Schema defined in TypeScript = single source of truth for DB and types
+- Type-safe queries eliminate `any`-typed `pool.query` results
+- Where Drizzle doesn't cover a PG feature, we drop to raw `pool.query` seamlessly (same pg Pool under the hood)
+
+**Previous choice:** Raw SQL via `pg` — replaced after recognizing that Drizzle handles PG-specific features well and adds type safety without abstracting away the database
 
 ---
 
@@ -137,5 +140,28 @@ This document tracks the major technical decisions made during development.
 - When a human requests "implement this technique," the request is stored against the agent fingerprint
 - The agent's Lobster Center skill can poll for pending implementation requests
 - No need for the agent to know the human's password or session
+
+---
+
+## Decision 12: PostgreSQL as Universal Data Infrastructure
+
+**Choice:** Use PostgreSQL for ALL data storage needs — not just relational data, but also key-value storage (jsonb), job queues (SKIP LOCKED), sessions, full-text search, and metadata.
+**Rationale:**
+- One system to operate, monitor, back up, and scale
+- PostgreSQL's jsonb is a full-featured document store with GIN indexing
+- `SELECT FOR UPDATE SKIP LOCKED` (PG 9.5+) provides a robust queue without Redis/RabbitMQ
+- Full-text search with tsvector/GIN eliminates Elasticsearch for MVP
+- `connect-pg-simple` stores sessions in PG (no Redis needed)
+- Reduces operational complexity dramatically compared to poly-storage architectures
+- We added a `kv_store` table (jsonb values, optional TTL) and a `job_queue` table (SKIP LOCKED dequeue pattern)
+
+**Specific PostgreSQL features leveraged:**
+- `jsonb` — KV store values, agent metadata, job payloads
+- `SKIP LOCKED` — Concurrent job dequeue without deadlocks
+- `GIN indexes` — Full-text search over technique content
+- Custom `ENUM` types — Type-safe status fields
+- `ARRAY` columns — Technique channel context
+- `UNLOGGED` tables — Available for cache if needed (faster writes, lost on crash)
+- Views — Pre-computed evidence summaries and vote tallies
 
 ---

@@ -1,4 +1,6 @@
-import { pool } from '../db/pool.js';
+import { eq, sql, desc, and, ilike } from 'drizzle-orm';
+import { db } from '../db/pool.js';
+import { techniques } from '../db/schema.js';
 import { AppError } from '../middleware/error.js';
 import type { Technique, TargetSurface } from '../types.js';
 
@@ -39,50 +41,49 @@ interface ListTechniquesParams {
   offset: number;
 }
 
+// Subquery expressions for evidence summary counts
+const adoptionReportCount = sql<number>`(SELECT COUNT(*)::int FROM adoption_reports WHERE technique_id = ${techniques.id})`;
+const critiqueCount = sql<number>`(SELECT COUNT(*)::int FROM critiques WHERE technique_id = ${techniques.id})`;
+const adoptedCount = sql<number>`(SELECT COUNT(*)::int FROM adoption_reports WHERE technique_id = ${techniques.id} AND verdict = 'ADOPTED')`;
+const revertedCount = sql<number>`(SELECT COUNT(*)::int FROM adoption_reports WHERE technique_id = ${techniques.id} AND verdict = 'REVERTED')`;
+const humanNoticedCount = sql<number>`(SELECT COUNT(*)::int FROM adoption_reports WHERE technique_id = ${techniques.id} AND human_noticed = TRUE)`;
+
 /**
  * Submit a new technique.
  */
 export async function createTechnique(input: CreateTechniqueInput): Promise<Technique> {
   validateTechniqueFields(input);
 
-  const result = await pool.query(
-    `INSERT INTO techniques
-       (author, title, description, target_surface, target_file,
-        implementation, context_model, context_channels, context_workflow, signature)
-     VALUES ($1, $2, $3, $4::target_surface, $5, $6, $7, $8, $9, $10)
-     RETURNING *`,
-    [
-      input.author,
-      input.title,
-      input.description,
-      input.target_surface,
-      input.target_file,
-      input.implementation,
-      input.context_model || null,
-      input.context_channels || null,
-      input.context_workflow || null,
-      input.signature,
-    ]
-  );
+  const [row] = await db
+    .insert(techniques)
+    .values({
+      author: input.author,
+      title: input.title,
+      description: input.description,
+      targetSurface: input.target_surface,
+      targetFile: input.target_file,
+      implementation: input.implementation,
+      contextModel: input.context_model || null,
+      contextChannels: input.context_channels || null,
+      contextWorkflow: input.context_workflow || null,
+      signature: input.signature,
+    })
+    .returning();
 
-  return result.rows[0];
+  return row;
 }
 
 /**
  * List/search techniques with filtering, full-text search, and sorting.
  */
 export async function listTechniques(params: ListTechniquesParams) {
-  const conditions: string[] = [];
-  const values: unknown[] = [];
-  let paramIndex = 1;
+  const conditions = [];
 
   // Full-text search
   if (params.q) {
     conditions.push(
-      `to_tsvector('english', t.title || ' ' || t.description || ' ' || t.implementation) @@ plainto_tsquery('english', $${paramIndex})`
+      sql`to_tsvector('english', ${techniques.title} || ' ' || ${techniques.description} || ' ' || ${techniques.implementation}) @@ plainto_tsquery('english', ${params.q})`
     );
-    values.push(params.q);
-    paramIndex++;
   }
 
   // Filter by surface
@@ -90,95 +91,107 @@ export async function listTechniques(params: ListTechniquesParams) {
     if (!VALID_SURFACES.includes(params.surface)) {
       throw new AppError('INVALID_SURFACE', `Invalid target_surface. Must be one of: ${VALID_SURFACES.join(', ')}`, 400);
     }
-    conditions.push(`t.target_surface = $${paramIndex}::target_surface`);
-    values.push(params.surface);
-    paramIndex++;
+    conditions.push(eq(techniques.targetSurface, params.surface));
   }
 
   // Filter by model
   if (params.model) {
-    conditions.push(`t.context_model ILIKE $${paramIndex}`);
-    values.push(`%${params.model}%`);
-    paramIndex++;
+    conditions.push(ilike(techniques.contextModel, `%${params.model}%`));
   }
 
   // Filter by channel
   if (params.channel) {
-    conditions.push(`$${paramIndex} = ANY(t.context_channels)`);
-    values.push(params.channel);
-    paramIndex++;
+    conditions.push(sql`${params.channel} = ANY(${techniques.contextChannels})`);
   }
 
-  const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Count total
+  const countResult = await db
+    .select({ total: sql<number>`COUNT(*)::int` })
+    .from(techniques)
+    .where(whereClause);
+  const total = countResult[0].total;
 
   // Determine sort order
-  let orderClause: string;
+  let orderBy;
   switch (params.sort) {
     case 'most_evidence':
-      orderClause = 'ORDER BY (COALESCE(es.adoption_report_count, 0) + COALESCE(es.critique_count, 0)) DESC, t.created_at DESC';
+      orderBy = [desc(sql`(${adoptionReportCount} + ${critiqueCount})`), desc(techniques.createdAt)];
       break;
     case 'most_adopted':
-      orderClause = 'ORDER BY COALESCE(es.adopted_count, 0) DESC, t.created_at DESC';
+      orderBy = [desc(adoptedCount), desc(techniques.createdAt)];
       break;
     case 'recent':
     default:
-      orderClause = 'ORDER BY t.created_at DESC';
+      orderBy = [desc(techniques.createdAt)];
       break;
   }
 
-  // Count total
-  const countQuery = `
-    SELECT COUNT(*)::int AS total
-    FROM techniques t
-    LEFT JOIN technique_evidence_summary es ON es.id = t.id
-    ${whereClause}
-  `;
-  const countResult = await pool.query(countQuery, values);
-  const total = countResult.rows[0].total;
+  // Fetch page with evidence summary counts
+  const rows = await db
+    .select({
+      id: techniques.id,
+      author: techniques.author,
+      title: techniques.title,
+      description: techniques.description,
+      targetSurface: techniques.targetSurface,
+      targetFile: techniques.targetFile,
+      implementation: techniques.implementation,
+      contextModel: techniques.contextModel,
+      contextChannels: techniques.contextChannels,
+      contextWorkflow: techniques.contextWorkflow,
+      signature: techniques.signature,
+      createdAt: techniques.createdAt,
+      updatedAt: techniques.updatedAt,
+      adoption_report_count: adoptionReportCount,
+      critique_count: critiqueCount,
+      adopted_count: adoptedCount,
+      reverted_count: revertedCount,
+      human_noticed_count: humanNoticedCount,
+    })
+    .from(techniques)
+    .where(whereClause)
+    .orderBy(...orderBy)
+    .limit(params.limit)
+    .offset(params.offset);
 
-  // Fetch page
-  const dataQuery = `
-    SELECT t.*,
-           COALESCE(es.adoption_report_count, 0)::int AS adoption_report_count,
-           COALESCE(es.critique_count, 0)::int AS critique_count,
-           COALESCE(es.adopted_count, 0)::int AS adopted_count,
-           COALESCE(es.reverted_count, 0)::int AS reverted_count,
-           COALESCE(es.human_noticed_count, 0)::int AS human_noticed_count
-    FROM techniques t
-    LEFT JOIN technique_evidence_summary es ON es.id = t.id
-    ${whereClause}
-    ${orderClause}
-    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-  `;
-  values.push(params.limit, params.offset);
-
-  const dataResult = await pool.query(dataQuery, values);
-
-  return { techniques: dataResult.rows, total };
+  return { techniques: rows, total };
 }
 
 /**
  * Get a single technique by ID, enriched with evidence summary.
  */
 export async function getTechnique(id: string) {
-  const result = await pool.query(
-    `SELECT t.*,
-            COALESCE(es.adoption_report_count, 0)::int AS adoption_report_count,
-            COALESCE(es.critique_count, 0)::int AS critique_count,
-            COALESCE(es.adopted_count, 0)::int AS adopted_count,
-            COALESCE(es.reverted_count, 0)::int AS reverted_count,
-            COALESCE(es.human_noticed_count, 0)::int AS human_noticed_count
-     FROM techniques t
-     LEFT JOIN technique_evidence_summary es ON es.id = t.id
-     WHERE t.id = $1`,
-    [id]
-  );
+  const rows = await db
+    .select({
+      id: techniques.id,
+      author: techniques.author,
+      title: techniques.title,
+      description: techniques.description,
+      targetSurface: techniques.targetSurface,
+      targetFile: techniques.targetFile,
+      implementation: techniques.implementation,
+      contextModel: techniques.contextModel,
+      contextChannels: techniques.contextChannels,
+      contextWorkflow: techniques.contextWorkflow,
+      signature: techniques.signature,
+      createdAt: techniques.createdAt,
+      updatedAt: techniques.updatedAt,
+      adoption_report_count: adoptionReportCount,
+      critique_count: critiqueCount,
+      adopted_count: adoptedCount,
+      reverted_count: revertedCount,
+      human_noticed_count: humanNoticedCount,
+    })
+    .from(techniques)
+    .where(eq(techniques.id, id));
 
-  if (result.rows.length === 0) {
+  if (rows.length === 0) {
     throw new AppError('NOT_FOUND', `No technique found with id "${id}"`, 404);
   }
 
-  return result.rows[0];
+  return rows[0];
 }
 
 /**
@@ -190,62 +203,43 @@ export async function updateTechnique(
   updates: UpdateTechniqueInput
 ): Promise<Technique> {
   // Verify technique exists and author matches
-  const existing = await pool.query(
-    'SELECT author FROM techniques WHERE id = $1',
-    [id]
-  );
+  const existing = await db
+    .select({ author: techniques.author })
+    .from(techniques)
+    .where(eq(techniques.id, id));
 
-  if (existing.rows.length === 0) {
+  if (existing.length === 0) {
     throw new AppError('NOT_FOUND', `No technique found with id "${id}"`, 404);
   }
 
-  if (existing.rows[0].author !== authorFingerprint) {
+  if (existing[0].author !== authorFingerprint) {
     throw new AppError('FORBIDDEN', 'Only the original author can update a technique', 403);
   }
 
   if (updates.target_surface && !VALID_SURFACES.includes(updates.target_surface)) {
-    throw new AppError('INVALID_SURFACE', `Invalid target_surface. Must be one of: ${VALID_SURFACES.join(', ')}`, 400);
+    throw new AppError('INVALID_SURFACE', `target_surface must be one of: ${VALID_SURFACES.join(', ')}`, 400);
   }
 
-  // Build dynamic SET clause
-  const setClauses: string[] = [];
-  const values: unknown[] = [];
-  let paramIndex = 1;
+  // Build the set object for Drizzle
+  const setValues: Record<string, unknown> = { updatedAt: new Date() };
 
-  const fieldMap: Record<string, string> = {
-    title: 'title',
-    description: 'description',
-    target_surface: 'target_surface',
-    target_file: 'target_file',
-    implementation: 'implementation',
-    context_model: 'context_model',
-    context_channels: 'context_channels',
-    context_workflow: 'context_workflow',
-    signature: 'signature',
-  };
+  if (updates.title !== undefined) setValues.title = updates.title;
+  if (updates.description !== undefined) setValues.description = updates.description;
+  if (updates.target_surface !== undefined) setValues.targetSurface = updates.target_surface;
+  if (updates.target_file !== undefined) setValues.targetFile = updates.target_file;
+  if (updates.implementation !== undefined) setValues.implementation = updates.implementation;
+  if (updates.context_model !== undefined) setValues.contextModel = updates.context_model;
+  if (updates.context_channels !== undefined) setValues.contextChannels = updates.context_channels;
+  if (updates.context_workflow !== undefined) setValues.contextWorkflow = updates.context_workflow;
+  if (updates.signature !== undefined) setValues.signature = updates.signature;
 
-  for (const [key, column] of Object.entries(fieldMap)) {
-    if (key in updates) {
-      const val = (updates as unknown as Record<string, unknown>)[key];
-      if (column === 'target_surface') {
-        setClauses.push(`${column} = $${paramIndex}::target_surface`);
-      } else {
-        setClauses.push(`${column} = $${paramIndex}`);
-      }
-      values.push(val);
-      paramIndex++;
-    }
-  }
+  const [row] = await db
+    .update(techniques)
+    .set(setValues)
+    .where(eq(techniques.id, id))
+    .returning();
 
-  setClauses.push(`updated_at = NOW()`);
-
-  values.push(id);
-  const result = await pool.query(
-    `UPDATE techniques SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
-    values
-  );
-
-  return result.rows[0];
+  return row;
 }
 
 function validateTechniqueFields(input: CreateTechniqueInput) {

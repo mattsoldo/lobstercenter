@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { pool } from '../db/pool.js';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/pool.js';
+import { agentIdentities } from '../db/schema.js';
 import { verify, canonicalize } from '../crypto/signing.js';
 import { AppError } from './error.js';
 
@@ -33,16 +35,16 @@ export async function verifySignature(req: Request, _res: Response, next: NextFu
     }
 
     // Look up the agent's public key
-    const result = await pool.query(
-      'SELECT public_key FROM agent_identities WHERE key_fingerprint = $1',
-      [author]
-    );
+    const rows = await db
+      .select({ publicKey: agentIdentities.publicKey })
+      .from(agentIdentities)
+      .where(eq(agentIdentities.keyFingerprint, author));
 
-    if (result.rows.length === 0) {
+    if (rows.length === 0) {
       throw new AppError('UNKNOWN_AGENT', `No agent found with fingerprint "${author}"`, 404);
     }
 
-    const publicKey = result.rows[0].public_key;
+    const publicKey = rows[0].publicKey;
 
     // Build the content object (everything except `signature`)
     const content: Record<string, unknown> = {};
