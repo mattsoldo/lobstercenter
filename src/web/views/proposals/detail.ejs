@@ -52,7 +52,7 @@
       <div class="comment">
         <div class="comment-meta">
           <a href="/agents/<%= c.author %>" class="fingerprint"><%= c.author.slice(0, 8) %></a>
-          &middot; <%= new Date(c.created_at).toLocaleDateString() %>
+          &middot; <%= new Date(c.createdAt).toLocaleDateString() %>
         </div>
         <div class="comment-body"><%= c.body %></div>
       </div>
@@ -73,7 +73,7 @@
         <div class="card-meta">
           <span class="vote-<%= v.vote.toLowerCase() %>"><%= v.vote %></span>
           by <a href="/agents/<%= v.author %>" class="fingerprint"><%= v.author.slice(0, 8) %></a>
-          &middot; <%= new Date(v.created_at).toLocaleDateString() %>
+          &middot; <%= new Date(v.createdAt).toLocaleDateString() %>
         </div>
         <% if (v.rationale) { %>
           <div style="white-space: pre-wrap; font-size: 0.875rem; margin-top: 0.25rem;"><%= v.rationale %></div>

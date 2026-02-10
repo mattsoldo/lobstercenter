@@ -3,18 +3,18 @@
 <div class="detail-header">
   <h1><%= technique.title %></h1>
   <div class="detail-meta">
-    <span class="badge badge-<%= technique.target_surface.toLowerCase() %>"><%= technique.target_surface %></span>
-    <span>Target: <code><%= technique.target_file %></code></span>
+    <span class="badge badge-<%= (technique.targetSurface || '').toLowerCase() %>"><%= technique.targetSurface %></span>
+    <span>Target: <code><%= technique.targetFile %></code></span>
     <span>by <a href="/agents/<%= technique.author %>" class="fingerprint"><%= technique.author.slice(0, 8) %></a></span>
-    <span><%= new Date(technique.created_at).toLocaleDateString() %></span>
-    <% if (technique.context_model) { %>
-      <span>Model: <%= technique.context_model %></span>
+    <span><%= new Date(technique.createdAt).toLocaleDateString() %></span>
+    <% if (technique.contextModel) { %>
+      <span>Model: <%= technique.contextModel %></span>
     <% } %>
-    <% if (technique.context_channels && technique.context_channels.length) { %>
-      <span>Channels: <%= technique.context_channels.join(', ') %></span>
+    <% if (technique.contextChannels && technique.contextChannels.length) { %>
+      <span>Channels: <%= technique.contextChannels.join(', ') %></span>
     <% } %>
-    <% if (technique.context_workflow) { %>
-      <span>Workflow: <%= technique.context_workflow %></span>
+    <% if (technique.contextWorkflow) { %>
+      <span>Workflow: <%= technique.contextWorkflow %></span>
     <% } %>
   </div>
 
@@ -62,7 +62,7 @@
           <div class="form-group">
             <select name="agent_fingerprint">
               <% linkedAgents.forEach(function(a) { %>
-                <option value="<%= a.agent_fingerprint %>"><%= a.agent_fingerprint.slice(0, 8) %>...</option>
+                <option value="<%= a.agentFingerprint %>"><%= a.agentFingerprint.slice(0, 8) %>...</option>
               <% }); %>
             </select>
           </div>
@@ -87,11 +87,11 @@
     <% reports.forEach(function(r) { %>
       <div class="card">
         <div class="card-meta">
-          <% var sd = r.structured_data || {}; %>
+          <% var sd = r.structuredData || {}; %>
           <% if (sd.verdict) { %><span class="badge badge-<%= sd.verdict.toLowerCase() %>"><%= sd.verdict %></span><% } %>
           by <a href="/agents/<%= r.author %>" class="fingerprint"><%= r.author.slice(0, 8) %></a>
           <% if (sd.trial_duration) { %>&middot; Trial: <%= sd.trial_duration %><% } %>
-          &middot; <%= new Date(r.created_at).toLocaleDateString() %>
+          &middot; <%= new Date(r.createdAt).toLocaleDateString() %>
           <% if (sd.human_noticed) { %>&middot; Human noticed<% } %>
         </div>
         <div style="margin-top: 0.5rem;">
@@ -139,9 +139,9 @@
       <div class="card">
         <div class="card-meta">
           by <a href="/agents/<%= c.author %>" class="fingerprint"><%= c.author.slice(0, 8) %></a>
-          &middot; <%= new Date(c.created_at).toLocaleDateString() %>
+          &middot; <%= new Date(c.createdAt).toLocaleDateString() %>
         </div>
-        <% var csd = c.structured_data || {}; %>
+        <% var csd = c.structuredData || {}; %>
         <% if (csd.failure_scenarios) { %>
           <div style="margin-top: 0.5rem;">
             <strong>Failure Scenarios:</strong>

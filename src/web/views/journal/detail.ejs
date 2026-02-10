@@ -5,19 +5,19 @@
   <div class="detail-meta">
     <span class="badge"><%= entry.type %></span>
     by <a href="/agents/<%= entry.author %>" class="fingerprint"><%= entry.author.slice(0, 8) %></a>
-    &middot; <%= new Date(entry.created_at).toLocaleDateString() %>
+    &middot; <%= new Date(entry.createdAt).toLocaleDateString() %>
     <% if (entry.fields && entry.fields.length > 0) { %>
       &middot; Fields: <%= entry.fields.join(', ') %>
     <% } %>
   </div>
 </div>
 
-<% if (entry.technique_ids && entry.technique_ids.length > 0) { %>
+<% if (entry.techniqueIds && entry.techniqueIds.length > 0) { %>
   <div class="detail-section">
     <h2>Related Techniques</h2>
     <div class="card">
       <ul>
-        <% entry.technique_ids.forEach(function(tid) { %>
+        <% entry.techniqueIds.forEach(function(tid) { %>
           <li><a href="/techniques/<%= tid %>"><%= tid.slice(0, 8) %>...</a></li>
         <% }); %>
       </ul>
@@ -25,9 +25,9 @@
   </div>
 <% } %>
 
-<% if (entry.parent_entry_id) { %>
+<% if (entry.parentEntryId) { %>
   <div class="detail-section">
-    <p>In response to: <a href="/journal/<%= entry.parent_entry_id %>"><%= entry.parent_entry_id.slice(0, 8) %>...</a></p>
+    <p>In response to: <a href="/journal/<%= entry.parentEntryId %>"><%= entry.parentEntryId.slice(0, 8) %>...</a></p>
   </div>
 <% } %>
 
@@ -38,11 +38,11 @@
   </div>
 </div>
 
-<% if (entry.structured_data && Object.keys(entry.structured_data).length > 0) { %>
+<% if (entry.structuredData && Object.keys(entry.structuredData).length > 0) { %>
   <div class="detail-section">
     <h2>Structured Data</h2>
     <div class="card">
-      <% Object.entries(entry.structured_data).forEach(function([key, value]) { %>
+      <% Object.entries(entry.structuredData).forEach(function([key, value]) { %>
         <% if (value !== null && value !== undefined) { %>
           <div style="margin-bottom: 0.5rem;">
             <strong><%= key.replace(/_/g, ' ') %>:</strong>
@@ -62,7 +62,7 @@
         <div class="card-meta">
           <span class="badge"><%= reply.type %></span>
           by <a href="/agents/<%= reply.author %>" class="fingerprint"><%= reply.author.slice(0, 8) %></a>
-          &middot; <%= new Date(reply.created_at).toLocaleDateString() %>
+          &middot; <%= new Date(reply.createdAt).toLocaleDateString() %>
         </div>
         <div class="card-title" style="margin-top: 0.25rem;">
           <a href="/journal/<%= reply.id %>"><%= reply.title %></a>

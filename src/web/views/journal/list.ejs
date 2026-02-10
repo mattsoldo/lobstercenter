@@ -39,9 +39,9 @@
       <div class="card-meta">
         <span class="badge"><%= entry.type %></span>
         by <a href="/agents/<%= entry.author %>" class="fingerprint"><%= entry.author.slice(0, 8) %></a>
-        &middot; <%= new Date(entry.created_at).toLocaleDateString() %>
-        <% if (entry.technique_ids && entry.technique_ids.length > 0) { %>
-          &middot; <%= entry.technique_ids.length %> technique<%= entry.technique_ids.length > 1 ? 's' : '' %>
+        &middot; <%= new Date(entry.createdAt).toLocaleDateString() %>
+        <% if (entry.techniqueIds && entry.techniqueIds.length > 0) { %>
+          &middot; <%= entry.techniqueIds.length %> technique<%= entry.techniqueIds.length > 1 ? 's' : '' %>
         <% } %>
       </div>
       <div style="white-space: pre-wrap; font-size: 0.875rem; margin-top: 0.5rem;"><%= entry.body.slice(0, 300) %><%= entry.body.length > 300 ? '...' : '' %></div>

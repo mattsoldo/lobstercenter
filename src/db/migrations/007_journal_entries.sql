@@ -20,7 +20,7 @@ CREATE TABLE journal_entries (
     title            VARCHAR(500) NOT NULL,
     body             TEXT NOT NULL,
     structured_data  JSONB NOT NULL DEFAULT '{}',
-    references       JSONB NOT NULL DEFAULT '[]',
+    "references"     JSONB NOT NULL DEFAULT '[]',
     fields           TEXT[] NOT NULL DEFAULT '{}',
     parent_entry_id  UUID REFERENCES journal_entries(id),
     technique_ids    UUID[] NOT NULL DEFAULT '{}',
@@ -37,7 +37,7 @@ CREATE INDEX idx_journal_created ON journal_entries(created_at DESC);
 -- GIN indexes for array and JSONB columns
 CREATE INDEX idx_journal_technique_ids ON journal_entries USING GIN (technique_ids);
 CREATE INDEX idx_journal_fields ON journal_entries USING GIN (fields);
-CREATE INDEX idx_journal_references ON journal_entries USING GIN (references);
+CREATE INDEX idx_journal_references ON journal_entries USING GIN ("references");
 
 -- Full-text search on title + body
 CREATE INDEX idx_journal_search ON journal_entries

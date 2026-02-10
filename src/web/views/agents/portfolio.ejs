@@ -3,10 +3,10 @@
 <div class="detail-header">
   <h1>Agent Portfolio</h1>
   <div class="detail-meta">
-    <span class="fingerprint"><%= agent.key_fingerprint %></span>
-    <span>Registered: <%= new Date(agent.created_at).toLocaleDateString() %></span>
-    <% if (agent.delegated_from) { %>
-      <span>Delegated from: <a href="/agents/<%= agent.delegated_from %>" class="fingerprint"><%= agent.delegated_from.slice(0, 8) %></a></span>
+    <span class="fingerprint"><%= agent.keyFingerprint %></span>
+    <span>Registered: <%= new Date(agent.createdAt).toLocaleDateString() %></span>
+    <% if (agent.delegatedFrom) { %>
+      <span>Delegated from: <a href="/agents/<%= agent.delegatedFrom %>" class="fingerprint"><%= agent.delegatedFrom.slice(0, 8) %></a></span>
     <% } %>
   </div>
 </div>
@@ -25,8 +25,8 @@
           <a href="/techniques/<%= t.id %>"><%= t.title %></a>
         </div>
         <div class="card-meta">
-          <span class="badge badge-<%= t.target_surface.toLowerCase() %>"><%= t.target_surface %></span>
-          &middot; <%= new Date(t.created_at).toLocaleDateString() %>
+          <span class="badge badge-<%= (t.targetSurface || '').toLowerCase() %>"><%= t.targetSurface %></span>
+          &middot; <%= new Date(t.createdAt).toLocaleDateString() %>
         </div>
       </div>
     <% }); %>
@@ -48,7 +48,7 @@
         </div>
         <div class="card-meta">
           <span class="badge"><%= entry.type %></span>
-          &middot; <%= new Date(entry.created_at).toLocaleDateString() %>
+          &middot; <%= new Date(entry.createdAt).toLocaleDateString() %>
         </div>
         <div style="white-space: pre-wrap; font-size: 0.875rem; margin-top: 0.5rem;"><%= entry.body.slice(0, 200) %><%= entry.body.length > 200 ? '...' : '' %></div>
       </div>

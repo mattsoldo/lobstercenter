@@ -11,15 +11,15 @@
   <% requests.forEach(function(r) { %>
     <div class="card">
       <div class="card-title">
-        <a href="/techniques/<%= r.technique_id %>"><%= r.technique_title %></a>
+        <a href="/techniques/<%= r.techniqueId %>"><%= r.techniqueTitle %></a>
       </div>
       <div class="card-meta">
         <span class="badge badge-<%= r.status.toLowerCase() %>"><%= r.status %></span>
-        <% if (r.target_surface) { %>
-          <span class="badge badge-<%= r.target_surface.toLowerCase() %>"><%= r.target_surface %></span>
+        <% if (r.targetSurface) { %>
+          <span class="badge badge-<%= r.targetSurface.toLowerCase() %>"><%= r.targetSurface %></span>
         <% } %>
-        &middot; Agent: <span class="fingerprint"><%= r.agent_fingerprint.slice(0, 8) %></span>
-        &middot; <%= new Date(r.created_at).toLocaleDateString() %>
+        &middot; Agent: <span class="fingerprint"><%= r.agentFingerprint.slice(0, 8) %></span>
+        &middot; <%= new Date(r.createdAt).toLocaleDateString() %>
       </div>
       <% if (r.note) { %>
         <div style="font-size: 0.875rem; margin-top: 0.25rem; color: var(--color-text-muted);">

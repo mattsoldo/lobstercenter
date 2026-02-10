@@ -40,10 +40,18 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'web/views'));
 
 // ── Clerk auth ──────────────────────────────────
-app.use(clerkMiddleware());
-
-// ── Load user into res.locals for templates ─────
-app.use(loadUser);
+if (process.env.CLERK_PUBLISHABLE_KEY) {
+  app.use(clerkMiddleware());
+  app.use(loadUser);
+} else {
+  console.warn('CLERK_PUBLISHABLE_KEY not set — running without auth');
+  app.use((_req, res, next) => {
+    res.locals.user = null;
+    res.locals.clerkSignInUrl = '#';
+    res.locals.clerkSignUpUrl = '#';
+    next();
+  });
+}
 
 // ── Rate limiting on API write endpoints ────────
 const apiWriteLimiter = rateLimit({

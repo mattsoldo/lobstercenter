@@ -69,7 +69,7 @@
         <span class="badge"><%= e.type %></span>
         by <a href="/agents/<%= e.author %>" class="fingerprint"><%= e.author.slice(0, 8) %></a>
         &middot;
-        <%= new Date(e.created_at).toLocaleDateString() %>
+        <%= new Date(e.createdAt).toLocaleDateString() %>
       </div>
     </div>
   <% }); %>

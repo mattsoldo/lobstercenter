@@ -165,70 +165,21 @@ export async function listEntries(params: {
     conditions.push(eq(journalEntries.author, params.author));
   }
 
-  // For field and technique_id and q, we need raw SQL conditions
-  const rawConditions: string[] = [];
-  const rawParams: unknown[] = [];
-
+  // Add SQL conditions for array/FTS fields
   if (params.field) {
-    rawConditions.push(`$1 = ANY(fields)`);
-    rawParams.push(params.field);
+    conditions.push(sql`${params.field} = ANY(${journalEntries.fields})`);
   }
 
   if (params.technique_id) {
-    rawConditions.push(`$${rawParams.length + 1}::uuid = ANY(technique_ids)`);
-    rawParams.push(params.technique_id);
+    conditions.push(sql`${params.technique_id}::uuid = ANY(${journalEntries.techniqueIds})`);
   }
 
   if (params.q) {
-    rawConditions.push(`to_tsvector('english', title || ' ' || body) @@ plainto_tsquery('english', $${rawParams.length + 1})`);
-    rawParams.push(params.q);
+    conditions.push(sql`to_tsvector('english', ${journalEntries.title} || ' ' || ${journalEntries.body}) @@ plainto_tsquery('english', ${params.q})`);
   }
 
-  // Build using Drizzle where possible, raw SQL for array/FTS conditions
-  let whereClause;
-  if (conditions.length > 0) {
-    whereClause = and(...conditions);
-  }
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  // If we have raw conditions, fall back to raw SQL query
-  if (rawConditions.length > 0) {
-    let query = 'SELECT * FROM journal_entries';
-    let countQuery = 'SELECT COUNT(*)::int as total FROM journal_entries';
-    const allConditions: string[] = [...rawConditions];
-    const allParams: unknown[] = [...rawParams];
-
-    if (params.type) {
-      allConditions.push(`type = $${allParams.length + 1}`);
-      allParams.push(params.type);
-    }
-    if (params.author) {
-      allConditions.push(`author = $${allParams.length + 1}`);
-      allParams.push(params.author);
-    }
-
-    if (allConditions.length > 0) {
-      const whereStr = ' WHERE ' + allConditions.join(' AND ');
-      query += whereStr;
-      countQuery += whereStr;
-    }
-
-    const countParams = [...allParams];
-    query += ` ORDER BY created_at DESC LIMIT $${allParams.length + 1} OFFSET $${allParams.length + 2}`;
-    allParams.push(limit, offset);
-
-    const { pool } = await import('../db/pool.js');
-    const [dataResult, countResult] = await Promise.all([
-      pool.query(query, allParams),
-      pool.query(countQuery, countParams),
-    ]);
-
-    return {
-      entries: dataResult.rows as JournalEntry[],
-      total: countResult.rows[0].total,
-    };
-  }
-
-  // Simple Drizzle path (no raw conditions)
   const [countResult, dataResult] = await Promise.all([
     whereClause
       ? db.select({ total: sql<number>`count(*)::int` }).from(journalEntries).where(whereClause)
@@ -258,11 +209,11 @@ export async function getEntriesForTechnique(techniqueId: string): Promise<Recor
     throw new AppError('NOT_FOUND', `No technique found with id "${techniqueId}"`, 404);
   }
 
-  const { pool } = await import('../db/pool.js');
-  const { rows } = await pool.query(
-    `SELECT * FROM journal_entries WHERE $1::uuid = ANY(technique_ids) ORDER BY created_at DESC`,
-    [techniqueId]
-  );
+  const rows = await db
+    .select()
+    .from(journalEntries)
+    .where(sql`${techniqueId}::uuid = ANY(${journalEntries.techniqueIds})`)
+    .orderBy(desc(journalEntries.createdAt));
 
   const grouped: Record<string, JournalEntry[]> = {};
   for (const row of rows as JournalEntry[]) {

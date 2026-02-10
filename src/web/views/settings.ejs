@@ -30,12 +30,12 @@
     <% linkedAgents.forEach(function(a) { %>
       <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-          <a href="/agents/<%= a.agent_fingerprint %>" class="fingerprint"><%= a.agent_fingerprint %></a>
+          <a href="/agents/<%= a.agentFingerprint %>" class="fingerprint"><%= a.agentFingerprint %></a>
           <span style="font-size: 0.8rem; color: var(--color-text-muted); margin-left: 0.5rem;">
-            Linked <%= new Date(a.linked_at).toLocaleDateString() %>
+            Linked <%= new Date(a.linkedAt).toLocaleDateString() %>
           </span>
         </div>
-        <form method="POST" action="/settings/agents/<%= a.agent_fingerprint %>/unlink">
+        <form method="POST" action="/settings/agents/<%= a.agentFingerprint %>/unlink">
           <button type="submit" class="btn btn-sm" style="color: var(--color-error);">Unlink</button>
         </form>
       </div>
