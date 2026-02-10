@@ -1,4 +1,4 @@
-import { generateKeypair, fingerprint, sign } from '../src/crypto/signing.js';
+import { generateKeypair, fingerprint, sign } from '../lib/crypto/signing';
 
 const BASE = 'http://localhost:3000';
 
