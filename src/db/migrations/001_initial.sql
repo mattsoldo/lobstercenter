@@ -1,4 +1,4 @@
--- Lobster Center — Initial Schema Migration
+-- Lobster's University — Initial Schema Migration
 -- From specs/schema.sql
 
 -- Extensions

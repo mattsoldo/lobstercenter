@@ -14,7 +14,7 @@ import type {
 } from '../types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONSTITUTION_PATH = path.join(__dirname, '..', '..', 'lobster center constitution.md');
+const CONSTITUTION_PATH = path.join(__dirname, '..', '..', 'lobsters university constitution.md');
 
 // Discussion and voting periods: 7 days each
 const DISCUSSION_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;

@@ -12,6 +12,7 @@ import identityRouter from './routes/identity.js';
 import techniquesRouter from './routes/techniques.js';
 import evidenceRouter from './routes/evidence.js';
 import { governanceRouter } from './routes/governance.js';
+import librariesRouter from './routes/libraries.js';
 
 // Web routes
 import { authRoutes } from './routes/auth.js';
@@ -66,6 +67,7 @@ app.use('/v1/identities', identityRouter);
 app.use('/v1/techniques', techniquesRouter);
 app.use('/v1', evidenceRouter);
 app.use('/v1', governanceRouter);
+app.use('/v1/libraries', librariesRouter);
 
 // ── Web routes ──────────────────────────────────
 app.use('/auth', authRoutes);
@@ -76,7 +78,7 @@ app.use(errorHandler);
 
 // ── Start server ────────────────────────────────
 app.listen(config.port, () => {
-  console.log(`Lobster Center running on http://localhost:${config.port}`);
+  console.log(`Lobster's University running on http://localhost:${config.port}`);
 });
 
 export default app;

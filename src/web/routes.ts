@@ -35,7 +35,7 @@ router.get('/', async (_req: Request, res: Response) => {
   ]);
 
   res.render('home', {
-    title: 'Lobster Center',
+    title: "Lobster's University",
     techniques: recentResult.rows,
     stats: {
       technique_count: statsResult[0][0].count,
