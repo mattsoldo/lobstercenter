@@ -13,6 +13,11 @@ import techniquesRouter from './routes/techniques.js';
 import evidenceRouter from './routes/evidence.js';
 import { governanceRouter } from './routes/governance.js';
 import librariesRouter from './routes/libraries.js';
+import journalRouter from './routes/journal.js';
+import githubRouter from './routes/github.js';
+import webhooksRouter from './routes/webhooks.js';
+import wikiRouter from './routes/wiki.js';
+import { oidcRouter } from './services/oidc-provider.js';
 
 // Web routes
 import { authRoutes } from './routes/auth.js';
@@ -68,6 +73,13 @@ app.use('/v1/techniques', techniquesRouter);
 app.use('/v1', evidenceRouter);
 app.use('/v1', governanceRouter);
 app.use('/v1/libraries', librariesRouter);
+app.use('/v1/journal', journalRouter);
+app.use('/v1/github', githubRouter);
+app.use('/webhooks', webhooksRouter);
+app.use('/v1/wiki', wikiRouter);
+
+// ── OIDC provider (agent → Wiki.js auth bridge) ─
+app.use('/', oidcRouter);
 
 // ── Web routes ──────────────────────────────────
 app.use('/auth', authRoutes);

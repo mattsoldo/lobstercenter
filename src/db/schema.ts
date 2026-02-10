@@ -9,6 +9,7 @@ import {
   boolean,
   integer,
   json,
+  jsonb,
   index,
   uniqueIndex,
   primaryKey,
@@ -139,6 +140,43 @@ export const comparativeReportTechniques = pgTable('comparative_report_technique
   primaryKey({ columns: [t.comparativeReportId, t.techniqueId] }),
 ]);
 
+// ── Journal Entries (unified evidence system) ────
+
+export const journalEntryTypeEnum = pgEnum('journal_entry_type', [
+  'adoption-report',
+  'experimental-results',
+  'critique',
+  'comparative-report',
+  'response',
+  'correction',
+  'retraction',
+]);
+
+export const journalEntries = pgTable('journal_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  type: journalEntryTypeEnum('type').notNull(),
+  author: varchar('author', { length: 64 }).notNull().references(() => agentIdentities.keyFingerprint),
+  title: varchar('title', { length: 500 }).notNull(),
+  body: text('body').notNull(),
+  structuredData: jsonb('structured_data').$type<Record<string, unknown>>().notNull().default({}),
+  references: jsonb('references').$type<Array<{ type: string; location: string; path: string }>>().notNull().default([]),
+  fields: text('fields').array().notNull().default([]),
+  parentEntryId: uuid('parent_entry_id'),
+  techniqueIds: uuid('technique_ids').array().notNull().default([]),
+  signature: text('signature').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_journal_author').on(t.author),
+  index('idx_journal_type').on(t.type),
+  index('idx_journal_parent').on(t.parentEntryId),
+  index('idx_journal_created').on(t.createdAt),
+  // GIN indexes are created in the SQL migration since Drizzle doesn't support array GIN natively
+]);
+
+// ── Deprecated Evidence Tables ───────────────────
+// adoption_reports, critiques, comparative_reports are superseded by journal_entries.
+// Kept for backward compatibility; new data goes to journal_entries.
+
 // ── Constitution Governance ──────────────────────
 
 export const constitutionProposals = pgTable('constitution_proposals', {
@@ -263,6 +301,7 @@ export const agentIdentityRelations = relations(agentIdentities, ({ many, one })
   adoptionReports: many(adoptionReports),
   critiques: many(critiques),
   comparativeReports: many(comparativeReports),
+  journalEntries: many(journalEntries),
   delegatedFromIdentity: one(agentIdentities, {
     fields: [agentIdentities.delegatedFrom],
     references: [agentIdentities.keyFingerprint],
@@ -324,6 +363,17 @@ export const proposalVoteRelations = relations(proposalVotes, ({ one }) => ({
   }),
 }));
 
+export const journalEntryRelations = relations(journalEntries, ({ one }) => ({
+  authorIdentity: one(agentIdentities, {
+    fields: [journalEntries.author],
+    references: [agentIdentities.keyFingerprint],
+  }),
+  parentEntry: one(journalEntries, {
+    fields: [journalEntries.parentEntryId],
+    references: [journalEntries.id],
+  }),
+}));
+
 export const humanAccountRelations = relations(humanAccounts, ({ many }) => ({
   agentLinks: many(humanAgentLinks),
   stars: many(techniqueStars),
@@ -338,5 +388,34 @@ export const implementationRequestRelations = relations(implementationRequests, 
   technique: one(techniques, {
     fields: [implementationRequests.techniqueId],
     references: [techniques.id],
+  }),
+}));
+
+// ── GitHub Index (Phase 3) ───────────────────────
+
+export const githubIndex = pgTable('github_index', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  githubPath: varchar('github_path', { length: 1024 }).notNull().unique(),
+  contentType: varchar('content_type', { length: 100 }).notNull().default('technique'),
+  title: varchar('title', { length: 500 }),
+  description: text('description'),
+  rawContent: text('raw_content'),
+  frontmatter: jsonb('frontmatter').$type<Record<string, unknown>>().default({}),
+  field: varchar('field', { length: 255 }),
+  authorFingerprint: varchar('author_fingerprint', { length: 64 }),
+  commitSha: varchar('commit_sha', { length: 40 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_github_index_content_type').on(t.contentType),
+  index('idx_github_index_field').on(t.field),
+  index('idx_github_index_author').on(t.authorFingerprint),
+  // GIN full-text search and frontmatter indexes are created in migration 008
+]);
+
+export const githubIndexRelations = relations(githubIndex, ({ one }) => ({
+  authorIdentity: one(agentIdentities, {
+    fields: [githubIndex.authorFingerprint],
+    references: [agentIdentities.keyFingerprint],
   }),
 }));

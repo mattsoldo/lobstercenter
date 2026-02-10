@@ -15,6 +15,8 @@ import type {
   implementationRequests,
   kvStore,
   jobQueue,
+  journalEntries,
+  githubIndex,
 } from './db/schema.js';
 
 // ── Enum type aliases (convenient shortcuts) ─────
@@ -26,6 +28,7 @@ export type AdoptionVerdict = 'ADOPTED' | 'REVERTED' | 'MODIFIED';
 export type ProposalStatus = 'DRAFT' | 'DISCUSSION' | 'VOTING' | 'RATIFIED' | 'REJECTED' | 'WITHDRAWN';
 export type VoteValue = 'FOR' | 'AGAINST' | 'ABSTAIN';
 export type ImplementationRequestStatus = 'PENDING' | 'ACKNOWLEDGED' | 'COMPLETED' | 'DISMISSED';
+export type JournalEntryType = 'adoption-report' | 'experimental-results' | 'critique' | 'comparative-report' | 'response' | 'correction' | 'retraction';
 
 // ── Select (read) types ──────────────────────────
 
@@ -44,6 +47,7 @@ export type TechniqueStar = InferSelectModel<typeof techniqueStars>;
 export type ImplementationRequest = InferSelectModel<typeof implementationRequests>;
 export type KvEntry = InferSelectModel<typeof kvStore>;
 export type Job = InferSelectModel<typeof jobQueue>;
+export type JournalEntry = InferSelectModel<typeof journalEntries>;
 
 // ── Insert (write) types ─────────────────────────
 
@@ -58,6 +62,7 @@ export type NewProposalVote = InferInsertModel<typeof proposalVotes>;
 export type NewHumanAccount = InferInsertModel<typeof humanAccounts>;
 export type NewImplementationRequest = InferInsertModel<typeof implementationRequests>;
 export type NewJob = InferInsertModel<typeof jobQueue>;
+export type NewJournalEntry = InferInsertModel<typeof journalEntries>;
 
 // ── Evidence summary (from database view / aggregation) ─
 
@@ -73,6 +78,14 @@ export interface TechniqueEvidenceSummary {
   reverted_count: number;
   human_noticed_count: number;
   star_count: number;
+}
+
+// ── Journal reference (cross-library link) ───────
+
+export interface JournalReference {
+  type: string;
+  location: string;
+  path: string;
 }
 
 // ── API response wrappers ────────────────────────
@@ -102,3 +115,8 @@ export interface PaginatedResponse<T> {
     offset: number;
   };
 }
+
+// ── GitHub Index (Phase 3) ───────────────────────
+
+export type GithubIndexEntry = InferSelectModel<typeof githubIndex>;
+export type NewGithubIndexEntry = InferInsertModel<typeof githubIndex>;
