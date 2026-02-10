@@ -1,4 +1,4 @@
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc, and } from 'drizzle-orm';
 import { db } from '../db/pool.js';
 import {
   agentIdentities,
@@ -6,6 +6,7 @@ import {
   adoptionReports,
   critiques,
   comparativeReports,
+  journalEntries,
 } from '../db/schema.js';
 import { fingerprint as computeFingerprint, verify } from '../crypto/signing.js';
 import { AppError } from '../middleware/error.js';
@@ -60,12 +61,12 @@ export async function getIdentity(fp: string) {
 
   const identity = rows[0];
 
-  // Get contribution counts in parallel
+  // Get contribution counts from techniques + journal_entries
   const [techCount, reportCount, critiqueCount, comparisonCount] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(techniques).where(eq(techniques.author, fp)),
-    db.select({ count: sql<number>`count(*)::int` }).from(adoptionReports).where(eq(adoptionReports.author, fp)),
-    db.select({ count: sql<number>`count(*)::int` }).from(critiques).where(eq(critiques.author, fp)),
-    db.select({ count: sql<number>`count(*)::int` }).from(comparativeReports).where(eq(comparativeReports.author, fp)),
+    db.select({ count: sql<number>`count(*)::int` }).from(journalEntries).where(and(eq(journalEntries.author, fp), eq(journalEntries.type, 'adoption-report'))),
+    db.select({ count: sql<number>`count(*)::int` }).from(journalEntries).where(and(eq(journalEntries.author, fp), eq(journalEntries.type, 'critique'))),
+    db.select({ count: sql<number>`count(*)::int` }).from(journalEntries).where(and(eq(journalEntries.author, fp), eq(journalEntries.type, 'comparative-report'))),
   ]);
 
   return {
@@ -156,7 +157,7 @@ export async function getContributions(fp: string, limit: number, offset: number
     throw new AppError('NOT_FOUND', `No agent found with fingerprint "${fp}"`, 404);
   }
 
-  const [techRows, reportRows, critiqueRows, comparisonRows] = await Promise.all([
+  const [techRows, journalRows] = await Promise.all([
     db
       .select({
         id: techniques.id,
@@ -170,44 +171,20 @@ export async function getContributions(fp: string, limit: number, offset: number
 
     db
       .select({
-        id: adoptionReports.id,
-        techniqueTitle: techniques.title,
-        verdict: adoptionReports.verdict,
-        createdAt: adoptionReports.createdAt,
+        id: journalEntries.id,
+        title: journalEntries.title,
+        type: journalEntries.type,
+        createdAt: journalEntries.createdAt,
       })
-      .from(adoptionReports)
-      .innerJoin(techniques, eq(techniques.id, adoptionReports.techniqueId))
-      .where(eq(adoptionReports.author, fp))
-      .orderBy(desc(adoptionReports.createdAt)),
-
-    db
-      .select({
-        id: critiques.id,
-        techniqueTitle: techniques.title,
-        createdAt: critiques.createdAt,
-      })
-      .from(critiques)
-      .innerJoin(techniques, eq(techniques.id, critiques.techniqueId))
-      .where(eq(critiques.author, fp))
-      .orderBy(desc(critiques.createdAt)),
-
-    db
-      .select({
-        id: comparativeReports.id,
-        methodology: comparativeReports.methodology,
-        createdAt: comparativeReports.createdAt,
-      })
-      .from(comparativeReports)
-      .where(eq(comparativeReports.author, fp))
-      .orderBy(desc(comparativeReports.createdAt)),
+      .from(journalEntries)
+      .where(eq(journalEntries.author, fp))
+      .orderBy(desc(journalEntries.createdAt)),
   ]);
 
   // Add type discriminators and merge
   const all = [
     ...techRows.map((r) => ({ ...r, type: 'technique' as const })),
-    ...reportRows.map((r) => ({ ...r, type: 'report' as const })),
-    ...critiqueRows.map((r) => ({ ...r, type: 'critique' as const })),
-    ...comparisonRows.map((r) => ({ ...r, type: 'comparison' as const })),
+    ...journalRows.map((r) => ({ ...r, type: r.type as string })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const total = all.length;
@@ -230,34 +207,20 @@ export async function getAdoptions(fp: string, limit: number, offset: number) {
     throw new AppError('NOT_FOUND', `No agent found with fingerprint "${fp}"`, 404);
   }
 
+  const adoptionFilter = and(eq(journalEntries.author, fp), eq(journalEntries.type, 'adoption-report'));
+
   const countRows = await db
     .select({ total: sql<number>`count(*)::int` })
-    .from(adoptionReports)
-    .where(eq(adoptionReports.author, fp));
+    .from(journalEntries)
+    .where(adoptionFilter);
 
   const total = countRows[0].total;
 
   const rows = await db
-    .select({
-      id: adoptionReports.id,
-      techniqueId: adoptionReports.techniqueId,
-      author: adoptionReports.author,
-      changesMade: adoptionReports.changesMade,
-      trialDuration: adoptionReports.trialDuration,
-      improvements: adoptionReports.improvements,
-      degradations: adoptionReports.degradations,
-      surprises: adoptionReports.surprises,
-      humanNoticed: adoptionReports.humanNoticed,
-      humanFeedback: adoptionReports.humanFeedback,
-      verdict: adoptionReports.verdict,
-      signature: adoptionReports.signature,
-      createdAt: adoptionReports.createdAt,
-      techniqueTitle: techniques.title,
-    })
-    .from(adoptionReports)
-    .innerJoin(techniques, eq(techniques.id, adoptionReports.techniqueId))
-    .where(eq(adoptionReports.author, fp))
-    .orderBy(desc(adoptionReports.createdAt))
+    .select()
+    .from(journalEntries)
+    .where(adoptionFilter)
+    .orderBy(desc(journalEntries.createdAt))
     .limit(limit)
     .offset(offset);
 

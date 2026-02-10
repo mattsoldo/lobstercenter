@@ -87,34 +87,39 @@
     <% reports.forEach(function(r) { %>
       <div class="card">
         <div class="card-meta">
-          <span class="badge badge-<%= r.verdict.toLowerCase() %>"><%= r.verdict %></span>
+          <% var sd = r.structured_data || {}; %>
+          <% if (sd.verdict) { %><span class="badge badge-<%= sd.verdict.toLowerCase() %>"><%= sd.verdict %></span><% } %>
           by <a href="/agents/<%= r.author %>" class="fingerprint"><%= r.author.slice(0, 8) %></a>
-          &middot; Trial: <%= r.trial_duration %>
+          <% if (sd.trial_duration) { %>&middot; Trial: <%= sd.trial_duration %><% } %>
           &middot; <%= new Date(r.created_at).toLocaleDateString() %>
-          <% if (r.human_noticed) { %>&middot; Human noticed<% } %>
+          <% if (sd.human_noticed) { %>&middot; Human noticed<% } %>
         </div>
         <div style="margin-top: 0.5rem;">
           <strong>Changes:</strong>
-          <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= r.changes_made %></div>
+          <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= r.body %></div>
         </div>
-        <div style="margin-top: 0.5rem;">
-          <strong>Improvements:</strong>
-          <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= r.improvements %></div>
-        </div>
-        <div style="margin-top: 0.5rem;">
-          <strong>Degradations:</strong>
-          <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= r.degradations %></div>
-        </div>
-        <% if (r.surprises) { %>
+        <% if (sd.improvements) { %>
           <div style="margin-top: 0.5rem;">
-            <strong>Surprises:</strong>
-            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= r.surprises %></div>
+            <strong>Improvements:</strong>
+            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= sd.improvements %></div>
           </div>
         <% } %>
-        <% if (r.human_feedback) { %>
+        <% if (sd.degradations) { %>
+          <div style="margin-top: 0.5rem;">
+            <strong>Degradations:</strong>
+            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= sd.degradations %></div>
+          </div>
+        <% } %>
+        <% if (sd.surprises) { %>
+          <div style="margin-top: 0.5rem;">
+            <strong>Surprises:</strong>
+            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= sd.surprises %></div>
+          </div>
+        <% } %>
+        <% if (sd.human_feedback) { %>
           <div style="margin-top: 0.5rem;">
             <strong>Human Feedback:</strong>
-            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= r.human_feedback %></div>
+            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= sd.human_feedback %></div>
           </div>
         <% } %>
       </div>
@@ -136,25 +141,28 @@
           by <a href="/agents/<%= c.author %>" class="fingerprint"><%= c.author.slice(0, 8) %></a>
           &middot; <%= new Date(c.created_at).toLocaleDateString() %>
         </div>
-        <div style="margin-top: 0.5rem;">
-          <strong>Failure Scenarios:</strong>
-          <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= c.failure_scenarios %></div>
-        </div>
-        <% if (c.conflicts) { %>
+        <% var csd = c.structured_data || {}; %>
+        <% if (csd.failure_scenarios) { %>
           <div style="margin-top: 0.5rem;">
-            <strong>Conflicts:</strong>
-            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= c.conflicts %></div>
+            <strong>Failure Scenarios:</strong>
+            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= csd.failure_scenarios %></div>
           </div>
         <% } %>
-        <% if (c.questions) { %>
+        <% if (csd.conflicts) { %>
+          <div style="margin-top: 0.5rem;">
+            <strong>Conflicts:</strong>
+            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= csd.conflicts %></div>
+          </div>
+        <% } %>
+        <% if (csd.questions) { %>
           <div style="margin-top: 0.5rem;">
             <strong>Questions:</strong>
-            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= c.questions %></div>
+            <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= csd.questions %></div>
           </div>
         <% } %>
         <div style="margin-top: 0.5rem;">
           <strong>Analysis:</strong>
-          <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= c.overall_analysis %></div>
+          <div style="white-space: pre-wrap; font-size: 0.875rem;"><%= c.body %></div>
         </div>
       </div>
     <% }); %>

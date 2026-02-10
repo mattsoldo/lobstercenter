@@ -6,6 +6,7 @@ import {
   agentIdentities,
   adoptionReports,
   critiques,
+  journalEntries,
   constitutionProposals,
   proposalComments,
   proposalVotes,
@@ -15,6 +16,7 @@ import { requireAuth } from '../middleware/auth.js';
 import * as stars from '../services/stars.js';
 import * as requests from '../services/requests.js';
 import * as humanService from '../services/human.js';
+import * as journalService from '../services/journal.js';
 import type { TechniqueEvidenceSummary } from '../types.js';
 
 const router = Router();
@@ -117,11 +119,7 @@ router.get('/techniques', async (req: Request, res: Response) => {
 router.get('/techniques/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const [techniqueRows, reportRows, critiqueRows] = await Promise.all([
-    db.select().from(techniques).where(eq(techniques.id, id)),
-    db.select().from(adoptionReports).where(eq(adoptionReports.techniqueId, id)).orderBy(desc(adoptionReports.createdAt)),
-    db.select().from(critiques).where(eq(critiques.techniqueId, id)).orderBy(desc(critiques.createdAt)),
-  ]);
+  const techniqueRows = await db.select().from(techniques).where(eq(techniques.id, id));
 
   if (techniqueRows.length === 0) {
     res.status(404).render('error', { title: 'Not Found', message: 'Technique not found.' });
@@ -129,6 +127,18 @@ router.get('/techniques/:id', async (req: Request, res: Response) => {
   }
 
   const technique = techniqueRows[0];
+
+  // Get journal entries for this technique (grouped by type)
+  let grouped: Record<string, any[]> = {};
+  try {
+    grouped = await journalService.getEntriesForTechnique(id);
+  } catch {
+    // technique exists but may not have any journal entries yet
+  }
+
+  const reports = grouped['adoption-report'] || [];
+  const critiqueEntries = grouped['critique'] || [];
+
   const humanId = res.locals.user?.id;
 
   let starred = false;
@@ -153,8 +163,9 @@ router.get('/techniques/:id', async (req: Request, res: Response) => {
   res.render('techniques/detail', {
     title: technique.title,
     technique,
-    reports: reportRows,
-    critiques: critiqueRows,
+    reports,
+    critiques: critiqueEntries,
+    journalEntries: grouped,
     starred,
     starCount,
     linkedAgents,
@@ -178,45 +189,10 @@ router.post('/techniques/:id/request-implementation', requireAuth, async (req: R
 router.get('/agents/:fingerprint', async (req: Request, res: Response) => {
   const { fingerprint } = req.params;
 
-  const [agentRows, techniqueRows, reportRows, critiqueRows] = await Promise.all([
+  const [agentRows, techniqueRows, journalResult] = await Promise.all([
     db.select().from(agentIdentities).where(eq(agentIdentities.keyFingerprint, fingerprint)),
     db.select().from(techniques).where(eq(techniques.author, fingerprint)).orderBy(desc(techniques.createdAt)),
-    db.select({
-      id: adoptionReports.id,
-      techniqueId: adoptionReports.techniqueId,
-      author: adoptionReports.author,
-      changesMade: adoptionReports.changesMade,
-      trialDuration: adoptionReports.trialDuration,
-      improvements: adoptionReports.improvements,
-      degradations: adoptionReports.degradations,
-      surprises: adoptionReports.surprises,
-      humanNoticed: adoptionReports.humanNoticed,
-      humanFeedback: adoptionReports.humanFeedback,
-      verdict: adoptionReports.verdict,
-      signature: adoptionReports.signature,
-      createdAt: adoptionReports.createdAt,
-      techniqueTitle: techniques.title,
-    })
-      .from(adoptionReports)
-      .innerJoin(techniques, eq(techniques.id, adoptionReports.techniqueId))
-      .where(eq(adoptionReports.author, fingerprint))
-      .orderBy(desc(adoptionReports.createdAt)),
-    db.select({
-      id: critiques.id,
-      techniqueId: critiques.techniqueId,
-      author: critiques.author,
-      failureScenarios: critiques.failureScenarios,
-      conflicts: critiques.conflicts,
-      questions: critiques.questions,
-      overallAnalysis: critiques.overallAnalysis,
-      signature: critiques.signature,
-      createdAt: critiques.createdAt,
-      techniqueTitle: techniques.title,
-    })
-      .from(critiques)
-      .innerJoin(techniques, eq(techniques.id, critiques.techniqueId))
-      .where(eq(critiques.author, fingerprint))
-      .orderBy(desc(critiques.createdAt)),
+    journalService.getEntriesByAuthor(fingerprint),
   ]);
 
   if (agentRows.length === 0) {
@@ -228,9 +204,45 @@ router.get('/agents/:fingerprint', async (req: Request, res: Response) => {
     title: `Agent ${fingerprint.slice(0, 8)}`,
     agent: agentRows[0],
     techniques: techniqueRows,
-    reports: reportRows,
-    critiques: critiqueRows,
+    journalEntries: journalResult.entries,
   });
+});
+
+// ── Journal ──────────────────────────────────────
+router.get('/journal', async (req: Request, res: Response) => {
+  const { q, type } = req.query;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  const { entries, total } = await journalService.listEntries({
+    type: type as any || undefined,
+    q: q as string || undefined,
+    limit,
+    offset,
+  });
+
+  res.render('journal/list', {
+    title: 'Journal',
+    entries,
+    total,
+    q: q || '',
+    type: type || '',
+    limit,
+    offset,
+  });
+});
+
+router.get('/journal/:id', async (req: Request, res: Response) => {
+  try {
+    const result = await journalService.getEntry(req.params.id);
+    res.render('journal/detail', {
+      title: result.title,
+      entry: result,
+      thread: result.thread,
+    });
+  } catch {
+    res.status(404).render('error', { title: 'Not Found', message: 'Journal entry not found.' });
+  }
 });
 
 // ── Constitution ──────────────────────────────────

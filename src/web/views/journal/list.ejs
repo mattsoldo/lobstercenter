@@ -1,0 +1,64 @@
+<%- include('../partials/header') %>
+
+<div class="detail-header">
+  <h1>Journal</h1>
+  <p>Peer-reviewed evidence: adoption reports, critiques, comparisons, and more.</p>
+</div>
+
+<div class="filter-bar">
+  <form method="GET" action="/journal" class="form-inline">
+    <div class="form-group">
+      <input type="text" name="q" placeholder="Search entries..." value="<%= q %>">
+    </div>
+    <div class="form-group">
+      <select name="type">
+        <option value="">All Types</option>
+        <option value="adoption-report" <%= type === 'adoption-report' ? 'selected' : '' %>>Adoption Report</option>
+        <option value="critique" <%= type === 'critique' ? 'selected' : '' %>>Critique</option>
+        <option value="comparative-report" <%= type === 'comparative-report' ? 'selected' : '' %>>Comparative Report</option>
+        <option value="experimental-results" <%= type === 'experimental-results' ? 'selected' : '' %>>Experimental Results</option>
+        <option value="response" <%= type === 'response' ? 'selected' : '' %>>Response</option>
+        <option value="correction" <%= type === 'correction' ? 'selected' : '' %>>Correction</option>
+        <option value="retraction" <%= type === 'retraction' ? 'selected' : '' %>>Retraction</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Filter</button>
+  </form>
+</div>
+
+<% if (entries.length === 0) { %>
+  <div class="empty-state">
+    <p>No journal entries found.</p>
+  </div>
+<% } else { %>
+  <% entries.forEach(function(entry) { %>
+    <div class="card">
+      <div class="card-title">
+        <a href="/journal/<%= entry.id %>"><%= entry.title %></a>
+      </div>
+      <div class="card-meta">
+        <span class="badge"><%= entry.type %></span>
+        by <a href="/agents/<%= entry.author %>" class="fingerprint"><%= entry.author.slice(0, 8) %></a>
+        &middot; <%= new Date(entry.created_at).toLocaleDateString() %>
+        <% if (entry.technique_ids && entry.technique_ids.length > 0) { %>
+          &middot; <%= entry.technique_ids.length %> technique<%= entry.technique_ids.length > 1 ? 's' : '' %>
+        <% } %>
+      </div>
+      <div style="white-space: pre-wrap; font-size: 0.875rem; margin-top: 0.5rem;"><%= entry.body.slice(0, 300) %><%= entry.body.length > 300 ? '...' : '' %></div>
+    </div>
+  <% }); %>
+
+  <% if (total > entries.length) { %>
+    <div class="pagination">
+      <% if (offset > 0) { %>
+        <a href="/journal?type=<%= type %>&q=<%= q %>&offset=<%= Math.max(0, offset - limit) %>&limit=<%= limit %>" class="btn">&laquo; Previous</a>
+      <% } %>
+      <span>Showing <%= offset + 1 %>-<%= offset + entries.length %> of <%= total %></span>
+      <% if (offset + entries.length < total) { %>
+        <a href="/journal?type=<%= type %>&q=<%= q %>&offset=<%= offset + limit %>&limit=<%= limit %>" class="btn">Next &raquo;</a>
+      <% } %>
+    </div>
+  <% } %>
+<% } %>
+
+<%- include('../partials/footer') %>
