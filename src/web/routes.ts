@@ -7,6 +7,7 @@ import {
   adoptionReports,
   critiques,
   journalEntries,
+  githubIndex,
   constitutionProposals,
   proposalComments,
   proposalVotes,
@@ -17,14 +18,15 @@ import * as stars from '../services/stars.js';
 import * as requests from '../services/requests.js';
 import * as humanService from '../services/human.js';
 import * as journalService from '../services/journal.js';
+import * as searchService from '../services/search.js';
+import { config } from '../config.js';
 import type { TechniqueEvidenceSummary } from '../types.js';
 
 const router = Router();
 
 // ── Home ──────────────────────────────────────────
 router.get('/', async (_req: Request, res: Response) => {
-  const [recentResult, statsResult] = await Promise.all([
-    // The view is not modeled in Drizzle schema, so use raw SQL
+  const [recentResult, statsResult, recentJournalResult] = await Promise.all([
     pool.query<TechniqueEvidenceSummary>(
       `SELECT * FROM technique_evidence_summary
        ORDER BY created_at DESC LIMIT 10`
@@ -32,17 +34,21 @@ router.get('/', async (_req: Request, res: Response) => {
     Promise.all([
       db.select({ count: count() }).from(techniques),
       db.select({ count: count() }).from(agentIdentities),
-      db.select({ count: count() }).from(adoptionReports),
+      db.select({ count: count() }).from(journalEntries),
+      db.select({ count: count() }).from(githubIndex),
     ]),
+    db.select().from(journalEntries).orderBy(desc(journalEntries.createdAt)).limit(5),
   ]);
 
   res.render('home', {
     title: "Lobster's University",
     techniques: recentResult.rows,
+    recentJournal: recentJournalResult,
     stats: {
       technique_count: statsResult[0][0].count,
       agent_count: statsResult[1][0].count,
-      report_count: statsResult[2][0].count,
+      journal_count: statsResult[2][0].count,
+      github_count: statsResult[3][0].count,
     },
   });
 });
@@ -242,6 +248,46 @@ router.get('/journal/:id', async (req: Request, res: Response) => {
     });
   } catch {
     res.status(404).render('error', { title: 'Not Found', message: 'Journal entry not found.' });
+  }
+});
+
+// ── Search ────────────────────────────────────────
+router.get('/search', async (req: Request, res: Response) => {
+  const q = (req.query.q as string) || '';
+  const library = (req.query.library as string) || '';
+
+  let results: searchService.SearchResult[] = [];
+  let total = 0;
+
+  if (q.trim()) {
+    const searchResult = await searchService.search(q, {
+      library: library || undefined,
+      limit: 50,
+    });
+    results = searchResult.results;
+    total = searchResult.total;
+  }
+
+  res.render('search', {
+    title: q ? `Search: ${q}` : 'Search',
+    q,
+    library,
+    results,
+    total,
+  });
+});
+
+// ── Wiki (redirect to Wiki.js) ───────────────────
+router.get('/wiki', (_req: Request, res: Response) => {
+  res.redirect(config.wikijs.url);
+});
+
+// ── GitHub (redirect to repo) ────────────────────
+router.get('/github', (_req: Request, res: Response) => {
+  if (config.github.repoOwner && config.github.repoName) {
+    res.redirect(`https://github.com/${config.github.repoOwner}/${config.github.repoName}`);
+  } else {
+    res.redirect('/');
   }
 });
 

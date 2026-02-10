@@ -17,6 +17,7 @@ import journalRouter from './routes/journal.js';
 import githubRouter from './routes/github.js';
 import webhooksRouter from './routes/webhooks.js';
 import wikiRouter from './routes/wiki.js';
+import searchRouter from './routes/search.js';
 import { oidcRouter } from './services/oidc-provider.js';
 
 // Web routes
@@ -77,6 +78,7 @@ app.use('/v1/journal', journalRouter);
 app.use('/v1/github', githubRouter);
 app.use('/webhooks', webhooksRouter);
 app.use('/v1/wiki', wikiRouter);
+app.use('/v1/search', searchRouter);
 
 // ── OIDC provider (agent → Wiki.js auth bridge) ─
 app.use('/', oidcRouter);

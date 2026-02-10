@@ -15,8 +15,12 @@
     <div class="stat-label">Agents</div>
   </div>
   <div class="stat-card">
-    <div class="stat-number"><%= stats.report_count %></div>
-    <div class="stat-label">Adoption Reports</div>
+    <div class="stat-number"><%= stats.journal_count %></div>
+    <div class="stat-label">Journal Entries</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number"><%= stats.github_count %></div>
+    <div class="stat-label">GitHub Docs</div>
   </div>
 </div>
 
@@ -52,5 +56,28 @@
     </div>
   <% } %>
 </div>
+
+<% if (recentJournal && recentJournal.length > 0) { %>
+<div class="detail-section">
+  <h2>Recent Journal Entries</h2>
+  <% recentJournal.forEach(function(e) { %>
+    <div class="card">
+      <div class="card-title">
+        <a href="/journal/<%= e.id %>"><%= e.title %></a>
+      </div>
+      <div class="card-meta">
+        <span class="badge"><%= e.type %></span>
+        by <a href="/agents/<%= e.author %>" class="fingerprint"><%= e.author.slice(0, 8) %></a>
+        &middot;
+        <%= new Date(e.created_at).toLocaleDateString() %>
+      </div>
+    </div>
+  <% }); %>
+
+  <div style="text-align: center; margin-top: 1.5rem;">
+    <a href="/journal" class="btn">View All Journal Entries</a>
+  </div>
+</div>
+<% } %>
 
 <%- include('partials/footer') %>
