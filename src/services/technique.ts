@@ -4,8 +4,6 @@ import { techniques } from '../db/schema.js';
 import { AppError } from '../middleware/error.js';
 import type { Technique, TargetSurface } from '../types.js';
 
-const VALID_SURFACES: TargetSurface[] = ['SOUL', 'AGENTS', 'HEARTBEAT', 'MEMORY', 'USER', 'TOOLS', 'SKILL'];
-
 interface CreateTechniqueInput {
   author: string;
   title: string;
@@ -16,6 +14,8 @@ interface CreateTechniqueInput {
   context_model?: string | null;
   context_channels?: string[] | null;
   context_workflow?: string | null;
+  code_url?: string | null;
+  code_commit_sha?: string | null;
   signature: string;
 }
 
@@ -28,6 +28,8 @@ interface UpdateTechniqueInput {
   context_model?: string | null;
   context_channels?: string[] | null;
   context_workflow?: string | null;
+  code_url?: string | null;
+  code_commit_sha?: string | null;
   signature: string;
 }
 
@@ -66,6 +68,8 @@ export async function createTechnique(input: CreateTechniqueInput): Promise<Tech
       contextModel: input.context_model || null,
       contextChannels: input.context_channels || null,
       contextWorkflow: input.context_workflow || null,
+      codeUrl: input.code_url || null,
+      codeCommitSha: input.code_commit_sha || null,
       signature: input.signature,
     })
     .returning();
@@ -88,9 +92,6 @@ export async function listTechniques(params: ListTechniquesParams) {
 
   // Filter by surface
   if (params.surface) {
-    if (!VALID_SURFACES.includes(params.surface)) {
-      throw new AppError('INVALID_SURFACE', `Invalid target_surface. Must be one of: ${VALID_SURFACES.join(', ')}`, 400);
-    }
     conditions.push(eq(techniques.targetSurface, params.surface));
   }
 
@@ -141,6 +142,8 @@ export async function listTechniques(params: ListTechniquesParams) {
       contextModel: techniques.contextModel,
       contextChannels: techniques.contextChannels,
       contextWorkflow: techniques.contextWorkflow,
+      codeUrl: techniques.codeUrl,
+      codeCommitSha: techniques.codeCommitSha,
       signature: techniques.signature,
       createdAt: techniques.createdAt,
       updatedAt: techniques.updatedAt,
@@ -175,6 +178,8 @@ export async function getTechnique(id: string) {
       contextModel: techniques.contextModel,
       contextChannels: techniques.contextChannels,
       contextWorkflow: techniques.contextWorkflow,
+      codeUrl: techniques.codeUrl,
+      codeCommitSha: techniques.codeCommitSha,
       signature: techniques.signature,
       createdAt: techniques.createdAt,
       updatedAt: techniques.updatedAt,
@@ -216,10 +221,6 @@ export async function updateTechnique(
     throw new AppError('FORBIDDEN', 'Only the original author can update a technique', 403);
   }
 
-  if (updates.target_surface && !VALID_SURFACES.includes(updates.target_surface)) {
-    throw new AppError('INVALID_SURFACE', `target_surface must be one of: ${VALID_SURFACES.join(', ')}`, 400);
-  }
-
   // Build the set object for Drizzle
   const setValues: Record<string, unknown> = { updatedAt: new Date() };
 
@@ -231,6 +232,8 @@ export async function updateTechnique(
   if (updates.context_model !== undefined) setValues.contextModel = updates.context_model;
   if (updates.context_channels !== undefined) setValues.contextChannels = updates.context_channels;
   if (updates.context_workflow !== undefined) setValues.contextWorkflow = updates.context_workflow;
+  if (updates.code_url !== undefined) setValues.codeUrl = updates.code_url;
+  if (updates.code_commit_sha !== undefined) setValues.codeCommitSha = updates.code_commit_sha;
   if (updates.signature !== undefined) setValues.signature = updates.signature;
 
   const [row] = await db
@@ -252,8 +255,11 @@ function validateTechniqueFields(input: CreateTechniqueInput) {
   if (!input.description || typeof input.description !== 'string') {
     throw new AppError('VALIDATION_ERROR', 'description is required', 400);
   }
-  if (!input.target_surface || !VALID_SURFACES.includes(input.target_surface)) {
-    throw new AppError('INVALID_SURFACE', `target_surface must be one of: ${VALID_SURFACES.join(', ')}`, 400);
+  if (!input.target_surface || typeof input.target_surface !== 'string' || input.target_surface.trim().length === 0) {
+    throw new AppError('VALIDATION_ERROR', 'target_surface is required', 400);
+  }
+  if (input.target_surface.length > 100) {
+    throw new AppError('VALIDATION_ERROR', 'target_surface must be 100 characters or fewer', 400);
   }
   if (!input.target_file || typeof input.target_file !== 'string') {
     throw new AppError('VALIDATION_ERROR', 'target_file is required', 400);

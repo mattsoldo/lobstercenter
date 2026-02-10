@@ -22,6 +22,8 @@ router.post('/', verifySignature, async (req: Request, res: Response, next: Next
       context_model: req.body.context_model,
       context_channels: req.body.context_channels,
       context_workflow: req.body.context_workflow,
+      code_url: req.body.code_url,
+      code_commit_sha: req.body.code_commit_sha,
       signature: req.body.signature,
     });
     res.status(201).json(wrapResponse(technique));
@@ -83,6 +85,8 @@ router.put('/:id', verifySignature, async (req: Request, res: Response, next: Ne
       context_model: req.body.context_model,
       context_channels: req.body.context_channels,
       context_workflow: req.body.context_workflow,
+      code_url: req.body.code_url,
+      code_commit_sha: req.body.code_commit_sha,
       signature: req.body.signature,
     });
     res.json(wrapResponse(technique));

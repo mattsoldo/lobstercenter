@@ -18,12 +18,10 @@
           <a href="/my/stars">Stars</a>
           <a href="/my/requests">Requests</a>
           <a href="/settings">Settings</a>
-          <form method="POST" action="/auth/logout" class="nav-logout">
-            <button type="submit">Log Out</button>
-          </form>
+          <a href="/auth/sign-out">Sign Out</a>
         <% } else { %>
-          <a href="/auth/login">Log In</a>
-          <a href="/auth/register" class="btn btn-sm">Register</a>
+          <a href="<%= clerkSignInUrl %>">Sign In</a>
+          <a href="<%= clerkSignUpUrl %>" class="btn btn-sm">Sign Up</a>
         <% } %>
       </div>
     </nav>

@@ -17,9 +17,10 @@ import { sql, relations } from 'drizzle-orm';
 
 // ── Enums ────────────────────────────────────────
 
-export const targetSurfaceEnum = pgEnum('target_surface', [
+// Well-known OpenClaw surfaces (for reference / UI suggestions, not enforced)
+export const WELL_KNOWN_SURFACES = [
   'SOUL', 'AGENTS', 'HEARTBEAT', 'MEMORY', 'USER', 'TOOLS', 'SKILL',
-]);
+] as const;
 
 export const adoptionVerdictEnum = pgEnum('adoption_verdict', [
   'ADOPTED', 'REVERTED', 'MODIFIED',
@@ -57,12 +58,14 @@ export const techniques = pgTable('techniques', {
   author: varchar('author', { length: 64 }).notNull().references(() => agentIdentities.keyFingerprint),
   title: varchar('title', { length: 500 }).notNull(),
   description: text('description').notNull(),
-  targetSurface: targetSurfaceEnum('target_surface').notNull(),
+  targetSurface: varchar('target_surface', { length: 100 }).notNull(),
   targetFile: varchar('target_file', { length: 255 }).notNull(),
   implementation: text('implementation').notNull(),
   contextModel: varchar('context_model', { length: 100 }),
   contextChannels: text('context_channels').array(),
   contextWorkflow: varchar('context_workflow', { length: 255 }),
+  codeUrl: varchar('code_url', { length: 2048 }),
+  codeCommitSha: varchar('code_commit_sha', { length: 40 }),
   signature: text('signature').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -183,8 +186,8 @@ export const proposalVotes = pgTable('proposal_votes', {
 
 export const humanAccounts = pgTable('human_accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
+  clerkUserId: varchar('clerk_user_id', { length: 255 }).unique(),
   email: varchar('email', { length: 255 }).notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
   displayName: varchar('display_name', { length: 100 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -218,16 +221,6 @@ export const implementationRequests = pgTable('implementation_requests', {
 }, (t) => [
   index('idx_impl_requests_agent').on(t.agentFingerprint, t.status),
   index('idx_impl_requests_human').on(t.humanId),
-]);
-
-// ── Session (for connect-pg-simple) ──────────────
-
-export const sessions = pgTable('session', {
-  sid: varchar('sid').primaryKey(),
-  sess: json('sess').notNull(),
-  expire: timestamp('expire', { withTimezone: true }).notNull(),
-}, (t) => [
-  index('idx_session_expire').on(t.expire),
 ]);
 
 // ── Key-Value Store (PostgreSQL as KV via jsonb) ─

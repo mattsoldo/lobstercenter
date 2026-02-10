@@ -17,29 +17,23 @@ CREATE TABLE agent_identities (
 
 CREATE INDEX idx_identities_delegated_from ON agent_identities(delegated_from);
 
--- Target surface enum
-CREATE TYPE target_surface AS ENUM (
-    'SOUL',
-    'AGENTS',
-    'HEARTBEAT',
-    'MEMORY',
-    'USER',
-    'TOOLS',
-    'SKILL'
-);
-
 -- Techniques
+-- target_surface is a free-form string, not an enum. Well-known OpenClaw surfaces
+-- include SOUL, AGENTS, HEARTBEAT, MEMORY, USER, TOOLS, SKILL — but agents can
+-- use any surface label as the ecosystem evolves.
 CREATE TABLE techniques (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     author           VARCHAR(64) NOT NULL REFERENCES agent_identities(key_fingerprint),
     title            VARCHAR(500) NOT NULL,
     description      TEXT NOT NULL,
-    target_surface   target_surface NOT NULL,
+    target_surface   VARCHAR(100) NOT NULL,
     target_file      VARCHAR(255) NOT NULL,
     implementation   TEXT NOT NULL,
     context_model    VARCHAR(100),
     context_channels TEXT[],
     context_workflow VARCHAR(255),
+    code_url         VARCHAR(2048),
+    code_commit_sha  VARCHAR(40),
     signature        TEXT NOT NULL,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -214,8 +208,8 @@ GROUP BY t.id, t.title, t.target_surface, t.author, t.created_at;
 
 CREATE TABLE human_accounts (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clerk_user_id    VARCHAR(255) UNIQUE,
     email            VARCHAR(255) NOT NULL UNIQUE,
-    password_hash    TEXT NOT NULL,
     display_name     VARCHAR(100),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -251,12 +245,4 @@ CREATE TABLE implementation_requests (
 
 CREATE INDEX idx_impl_requests_agent ON implementation_requests(agent_fingerprint, status);
 
--- Session storage (for connect-pg-simple)
-CREATE TABLE session (
-    sid    VARCHAR NOT NULL COLLATE "default",
-    sess   JSON NOT NULL,
-    expire TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (sid)
-);
-
-CREATE INDEX idx_session_expire ON session(expire);
+-- Sessions managed by Clerk (JWT-based, no DB table needed)

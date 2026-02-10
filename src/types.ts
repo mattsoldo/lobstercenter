@@ -13,14 +13,15 @@ import type {
   humanAgentLinks,
   techniqueStars,
   implementationRequests,
-  sessions,
   kvStore,
   jobQueue,
 } from './db/schema.js';
 
 // ── Enum type aliases (convenient shortcuts) ─────
 
-export type TargetSurface = 'SOUL' | 'AGENTS' | 'HEARTBEAT' | 'MEMORY' | 'USER' | 'TOOLS' | 'SKILL';
+// Target surface is a free-form string. Well-known OpenClaw surfaces are defined
+// in src/db/schema.ts WELL_KNOWN_SURFACES for UI suggestions, but any value is accepted.
+export type TargetSurface = string;
 export type AdoptionVerdict = 'ADOPTED' | 'REVERTED' | 'MODIFIED';
 export type ProposalStatus = 'DRAFT' | 'DISCUSSION' | 'VOTING' | 'RATIFIED' | 'REJECTED' | 'WITHDRAWN';
 export type VoteValue = 'FOR' | 'AGAINST' | 'ABSTAIN';
@@ -41,7 +42,6 @@ export type HumanAccount = InferSelectModel<typeof humanAccounts>;
 export type HumanAgentLink = InferSelectModel<typeof humanAgentLinks>;
 export type TechniqueStar = InferSelectModel<typeof techniqueStars>;
 export type ImplementationRequest = InferSelectModel<typeof implementationRequests>;
-export type Session = InferSelectModel<typeof sessions>;
 export type KvEntry = InferSelectModel<typeof kvStore>;
 export type Job = InferSelectModel<typeof jobQueue>;
 

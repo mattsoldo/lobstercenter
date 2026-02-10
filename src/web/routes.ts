@@ -129,7 +129,7 @@ router.get('/techniques/:id', async (req: Request, res: Response) => {
   }
 
   const technique = techniqueRows[0];
-  const humanId = req.session.humanId;
+  const humanId = res.locals.user?.id;
 
   let starred = false;
   let starCount = 0;
@@ -163,14 +163,14 @@ router.get('/techniques/:id', async (req: Request, res: Response) => {
 
 // ── Star toggle ───────────────────────────────────
 router.post('/techniques/:id/star', requireAuth, async (req: Request, res: Response) => {
-  await stars.toggleStar(req.session.humanId!, req.params.id);
+  await stars.toggleStar(res.locals.user.id, req.params.id);
   res.redirect(`/techniques/${req.params.id}`);
 });
 
 // ── Implementation request ────────────────────────
 router.post('/techniques/:id/request-implementation', requireAuth, async (req: Request, res: Response) => {
   const { agent_fingerprint, note } = req.body;
-  await requests.createRequest(req.session.humanId!, req.params.id, agent_fingerprint, note || null);
+  await requests.createRequest(res.locals.user.id, req.params.id, agent_fingerprint, note || null);
   res.redirect(`/techniques/${req.params.id}`);
 });
 
@@ -297,7 +297,7 @@ router.get('/proposals/:id', async (req: Request, res: Response) => {
 
 // ── Settings ──────────────────────────────────────
 router.get('/settings', requireAuth, async (req: Request, res: Response) => {
-  const linkedAgents = await humanService.getLinkedAgents(req.session.humanId!);
+  const linkedAgents = await humanService.getLinkedAgents(res.locals.user.id);
 
   res.render('settings', {
     title: 'Settings',
@@ -311,8 +311,8 @@ router.post('/settings/agents', requireAuth, async (req: Request, res: Response)
   const { fingerprint } = req.body;
 
   try {
-    await humanService.linkAgent(req.session.humanId!, fingerprint);
-    const linkedAgents = await humanService.getLinkedAgents(req.session.humanId!);
+    await humanService.linkAgent(res.locals.user.id, fingerprint);
+    const linkedAgents = await humanService.getLinkedAgents(res.locals.user.id);
     res.render('settings', {
       title: 'Settings',
       linkedAgents,
@@ -320,7 +320,7 @@ router.post('/settings/agents', requireAuth, async (req: Request, res: Response)
       success: 'Agent linked successfully.',
     });
   } catch (err: unknown) {
-    const linkedAgents = await humanService.getLinkedAgents(req.session.humanId!);
+    const linkedAgents = await humanService.getLinkedAgents(res.locals.user.id);
     const message = err instanceof Error ? err.message : 'Failed to link agent.';
     res.render('settings', {
       title: 'Settings',
@@ -333,7 +333,7 @@ router.post('/settings/agents', requireAuth, async (req: Request, res: Response)
 
 router.post('/settings/agents/:fingerprint/unlink', requireAuth, async (req: Request, res: Response) => {
   try {
-    await humanService.unlinkAgent(req.session.humanId!, req.params.fingerprint);
+    await humanService.unlinkAgent(res.locals.user.id, req.params.fingerprint);
   } catch {
     // ignore — already unlinked
   }
@@ -342,7 +342,7 @@ router.post('/settings/agents/:fingerprint/unlink', requireAuth, async (req: Req
 
 // ── My Stars ──────────────────────────────────────
 router.get('/my/stars', requireAuth, async (req: Request, res: Response) => {
-  const starredTechniques = await stars.getStarredTechniques(req.session.humanId!);
+  const starredTechniques = await stars.getStarredTechniques(res.locals.user.id);
 
   let techniqueList: TechniqueEvidenceSummary[] = [];
   if (starredTechniques.length > 0) {
@@ -363,7 +363,7 @@ router.get('/my/stars', requireAuth, async (req: Request, res: Response) => {
 
 // ── My Requests ───────────────────────────────────
 router.get('/my/requests', requireAuth, async (req: Request, res: Response) => {
-  const myRequests = await requests.getRequestsByHuman(req.session.humanId!);
+  const myRequests = await requests.getRequestsByHuman(res.locals.user.id);
 
   res.render('my/requests', {
     title: 'My Requests',

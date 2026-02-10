@@ -1,53 +1,27 @@
-import bcrypt from 'bcryptjs';
 import { eq, and, desc } from 'drizzle-orm';
 import { db } from '../db/pool.js';
 import { humanAccounts, humanAgentLinks, agentIdentities } from '../db/schema.js';
 import { AppError } from '../middleware/error.js';
 import type { HumanAccount, HumanAgentLink } from '../types.js';
 
-const SALT_ROUNDS = 12;
-
-export async function createAccount(
+export async function findOrCreateByClerkId(
+  clerkUserId: string,
   email: string,
-  password: string,
   displayName: string | null
-): Promise<HumanAccount> {
-  const existing = await db
-    .select({ id: humanAccounts.id })
-    .from(humanAccounts)
-    .where(eq(humanAccounts.email, email));
-
-  if (existing.length > 0) {
-    throw new AppError('EMAIL_TAKEN', 'An account with that email already exists', 409);
-  }
-
-  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-  const [account] = await db
-    .insert(humanAccounts)
-    .values({ email, passwordHash, displayName })
-    .returning();
-
-  return account;
-}
-
-export async function authenticate(
-  email: string,
-  password: string
 ): Promise<HumanAccount> {
   const rows = await db
     .select()
     .from(humanAccounts)
-    .where(eq(humanAccounts.email, email));
+    .where(eq(humanAccounts.clerkUserId, clerkUserId));
 
-  if (rows.length === 0) {
-    throw new AppError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+  if (rows.length > 0) {
+    return rows[0];
   }
 
-  const account = rows[0];
-  const valid = await bcrypt.compare(password, account.passwordHash);
-  if (!valid) {
-    throw new AppError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
-  }
+  const [account] = await db
+    .insert(humanAccounts)
+    .values({ clerkUserId, email, displayName })
+    .returning();
 
   return account;
 }

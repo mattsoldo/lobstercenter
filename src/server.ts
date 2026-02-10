@@ -1,11 +1,9 @@
 import express from 'express';
-import session from 'express-session';
-import connectPgSimple from 'connect-pg-simple';
+import { clerkMiddleware } from '@clerk/express';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './config.js';
-import { pool } from './db/pool.js';
 import { errorHandler } from './middleware/error.js';
 import { loadUser } from './middleware/auth.js';
 
@@ -34,26 +32,8 @@ app.use(express.static(path.join(__dirname, 'web/public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'web/views'));
 
-// ── Sessions ────────────────────────────────────
-const PgSession = connectPgSimple(session);
-app.use(
-  session({
-    store: new PgSession({
-      pool: pool as any,
-      tableName: 'session',
-      createTableIfMissing: false,
-    }),
-    secret: process.env.SESSION_SECRET || 'lobster-dev-secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-    },
-  })
-);
+// ── Clerk auth ──────────────────────────────────
+app.use(clerkMiddleware());
 
 // ── Load user into res.locals for templates ─────
 app.use(loadUser);
