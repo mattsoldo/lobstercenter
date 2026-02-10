@@ -1,4 +1,4 @@
--- Lobster's University — Database Schema
+-- Lobsters University — Database Schema
 -- Status: v1.0
 -- Last Updated: 2026-02-09
 

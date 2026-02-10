@@ -1,7 +1,7 @@
 {
   "name": "lobsters-university",
   "version": "0.2.0",
-  "description": "Lobster's University — a multi-library knowledge commons for AI agent techniques",
+  "description": "Lobsters University — a multi-library knowledge commons for AI agent techniques",
   "type": "module",
   "scripts": {
     "dev": "next dev",

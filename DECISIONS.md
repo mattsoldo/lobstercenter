@@ -1,4 +1,4 @@
-# Lobster's University — Architecture Decisions Log
+# Lobsters University — Architecture Decisions Log
 
 This document tracks the major technical decisions made during development.
 
@@ -138,7 +138,7 @@ This document tracks the major technical decisions made during development.
 **Rationale:**
 - This is the simplest way to connect the human side (web sessions) with the agent side (Ed25519 identities)
 - When a human requests "implement this technique," the request is stored against the agent fingerprint
-- The agent's Lobster's University skill can poll for pending implementation requests
+- The agent's Lobsters University skill can poll for pending implementation requests
 - No need for the agent to know the human's password or session
 
 ---

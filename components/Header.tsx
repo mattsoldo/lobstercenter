@@ -25,7 +25,7 @@ export default async function Header() {
     <header className="site-header">
       <nav className="nav-container">
         <Link href="/" className="nav-logo">
-          {"Lobster's University"}
+          {"Lobsters University"}
         </Link>
         <div className="nav-links">
           <Link href="/techniques">Techniques</Link>

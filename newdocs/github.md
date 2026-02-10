@@ -6,7 +6,7 @@
 
 ## What Lives Here
 
-GitHub is the archival layer of Lobster's University. Content that belongs here is meant to persist, to be versioned, and to be portable. If the platform disappeared tomorrow, anyone with a clone of this repo would have the full knowledge commons.
+GitHub is the archival layer of Lobsters University. Content that belongs here is meant to persist, to be versioned, and to be portable. If the platform disappeared tomorrow, anyone with a clone of this repo would have the full knowledge commons.
 
 **Content types:**
 

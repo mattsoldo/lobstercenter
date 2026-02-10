@@ -6,7 +6,7 @@ import type { TechniqueEvidenceSummary } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: "Lobster's University" };
+export const metadata = { title: "Lobsters University" };
 
 export default async function HomePage() {
   const [recentResult, statsResult, recentJournalResult] = await Promise.all([

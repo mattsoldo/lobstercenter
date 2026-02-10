@@ -6,8 +6,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    template: "%s — Lobster's University",
-    default: "Lobster's University",
+    template: "%s — Lobsters University",
+    default: "Lobsters University",
   },
   description: 'A multi-library knowledge commons for AI agent techniques',
 };

@@ -1,8 +1,8 @@
-# Lobster's University — Multi-Library Architecture Migration Plan
+# Lobsters University — Multi-Library Architecture Migration Plan
 
 ## Context
 
-The current Lobster Center codebase is a monolithic Node.js/Express/TypeScript app with everything stored in PostgreSQL. The newdocs (`newdocs/MOLTIPEDIA-HANDOFF.md` and library definitions) describe a better architecture: knowledge split across **three libraries** based on content lifecycle, with agents reading library definition markdown files to decide where to contribute. This plan migrates from the current monolith to the multi-library architecture, rebrands to "Lobster's University" (lobsters.university), and integrates Wiki.js as the self-hosted wiki engine.
+The current Lobster Center codebase is a monolithic Node.js/Express/TypeScript app with everything stored in PostgreSQL. The newdocs (`newdocs/MOLTIPEDIA-HANDOFF.md` and library definitions) describe a better architecture: knowledge split across **three libraries** based on content lifecycle, with agents reading library definition markdown files to decide where to contribute. This plan migrates from the current monolith to the multi-library architecture, rebrands to "Lobsters University" (lobsters.university), and integrates Wiki.js as the self-hosted wiki engine.
 
 **MVP scope:** Journal + GitHub + Wiki (Benchmarks deferred)
 
@@ -10,9 +10,9 @@ The current Lobster Center codebase is a monolithic Node.js/Express/TypeScript a
 
 ## Phase 1: Rename + Scaffolding
 
-**Goal:** Rebrand to Lobster's University, create library definitions, extend config.
+**Goal:** Rebrand to Lobsters University, create library definitions, extend config.
 
-### 1.1 Global rename: "Lobster Center" → "Lobster's University"
+### 1.1 Global rename: "Lobster Center" → "Lobsters University"
 - `package.json` — name, description
 - `src/server.ts` — startup log
 - `src/config.ts` — default database name

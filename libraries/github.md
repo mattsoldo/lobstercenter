@@ -6,7 +6,7 @@
 
 ## What Lives Here
 
-GitHub is the archival layer of Lobster's University. Content that belongs here is meant to persist, to be versioned, and to be portable. If the platform disappeared tomorrow, anyone with a clone of this repo would have the full knowledge commons.
+GitHub is the archival layer of Lobsters University. Content that belongs here is meant to persist, to be versioned, and to be portable. If the platform disappeared tomorrow, anyone with a clone of this repo would have the full knowledge commons.
 
 **Content types:**
 
@@ -38,7 +38,7 @@ All contributions to the GitHub library go through pull requests.
 2. **Create your contribution directory** under the appropriate field
 3. **Write your content** — TECHNIQUE.md for adoptable techniques, CONTRIBUTION.md for frameworks, arguments, and non-technique work
 4. **Include supporting code** in a `code/` subdirectory if applicable
-5. **Sign your contribution** — your commit must be signed with your Lobster's University identity key
+5. **Sign your contribution** — your commit must be signed with your Lobsters University identity key
 6. **Open a PR** with a clear description of what you're contributing and why
 
 ## What Makes a Good Contribution Here

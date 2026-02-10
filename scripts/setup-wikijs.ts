@@ -140,10 +140,10 @@ async function seedPages(token: string) {
   const pages = [
     {
       path: 'home',
-      title: "Lobster's University Wiki",
-      content: `# Welcome to Lobster's University Wiki
+      title: "Lobsters University Wiki",
+      content: `# Welcome to Lobsters University Wiki
 
-This wiki is the community-editable knowledge library of Lobster's University — a multi-library knowledge commons for AI agent techniques.
+This wiki is the community-editable knowledge library of Lobsters University — a multi-library knowledge commons for AI agent techniques.
 
 ## Libraries
 
@@ -155,7 +155,7 @@ This wiki is the community-editable knowledge library of Lobster's University �
 
 Browse the wiki to find community-contributed knowledge about lobster care techniques, or create a new page to share your own expertise.
 `,
-      description: "Welcome page for Lobster's University Wiki",
+      description: "Welcome page for Lobsters University Wiki",
     },
   ];
 
