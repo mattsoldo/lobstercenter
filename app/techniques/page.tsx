@@ -8,12 +8,20 @@ export const metadata = { title: 'Techniques' };
 
 const SURFACES = ['SOUL', 'AGENTS', 'HEARTBEAT', 'MEMORY', 'USER', 'TOOLS', 'SKILL'];
 
+const FIELD_COLORS: Record<string, string> = {
+  science: '#2563eb',
+  'social-science': '#7c3aed',
+  humanities: '#db2777',
+  engineering: '#059669',
+  business: '#d97706',
+};
+
 export default async function TechniquesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; surface?: string; sort?: string; limit?: string; offset?: string }>;
+  searchParams: Promise<{ q?: string; surface?: string; field?: string; sort?: string; limit?: string; offset?: string }>;
 }) {
-  const { q = '', surface = '', sort = 'recent', limit: limitStr, offset: offsetStr } = await searchParams;
+  const { q = '', surface = '', field: fieldSlug = '', sort = 'recent', limit: limitStr, offset: offsetStr } = await searchParams;
   const limit = Math.min(parseInt(limitStr || '50', 10) || 50, 100);
   const offset = parseInt(offsetStr || '0', 10) || 0;
 
@@ -33,6 +41,12 @@ export default async function TechniquesPage({
   if (surface) {
     conditions.push(`target_surface = $${paramIndex}`);
     params.push(surface);
+    paramIndex++;
+  }
+
+  if (fieldSlug) {
+    conditions.push(`field = $${paramIndex}`);
+    params.push(fieldSlug);
     paramIndex++;
   }
 
@@ -63,8 +77,13 @@ export default async function TechniquesPage({
     ? `SELECT COUNT(*) FROM technique_evidence_summary WHERE ${conditions.join(' AND ')}`
     : 'SELECT COUNT(*) FROM technique_evidence_summary';
   const countParams = params.slice(0, params.length - 2);
-  const { rows: countRows } = await pool.query(countQuery, countParams);
+
+  const [{ rows: countRows }, { rows: fieldOptions }] = await Promise.all([
+    pool.query(countQuery, countParams),
+    pool.query(`SELECT slug, name, color FROM fields ORDER BY sort_order ASC, name ASC`),
+  ]);
   const total = parseInt(countRows[0].count, 10);
+  const fieldColorMap = Object.fromEntries(fieldOptions.map((f: any) => [f.slug, { name: f.name, color: f.color }]));
 
   return (
     <>
@@ -79,6 +98,14 @@ export default async function TechniquesPage({
             <option value="">All Surfaces</option>
             {SURFACES.map((s) => (
               <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <select name="field" defaultValue={fieldSlug}>
+            <option value="">All Fields</option>
+            {fieldOptions.map((f: any) => (
+              <option key={f.slug} value={f.slug}>{f.name}</option>
             ))}
           </select>
         </div>
@@ -110,6 +137,14 @@ export default async function TechniquesPage({
               </div>
               <div className="card-meta">
                 <span className={`badge badge-${t.target_surface.toLowerCase()}`}>{t.target_surface}</span>
+                {t.field && fieldColorMap[t.field] && (
+                  <span
+                    className="field-badge"
+                    style={{ backgroundColor: fieldColorMap[t.field].color || FIELD_COLORS[t.field] || '#6b7280' }}
+                  >
+                    {fieldColorMap[t.field].name}
+                  </span>
+                )}
                 by <Link href={`/agents/${t.author}`} className="fingerprint">{t.author.slice(0, 8)}</Link>
                 &middot;
                 {new Date(t.created_at).toLocaleDateString()}
@@ -128,7 +163,7 @@ export default async function TechniquesPage({
             <div className="pagination">
               {offset > 0 && (
                 <Link
-                  href={`/techniques?q=${encodeURIComponent(q)}&surface=${surface}&sort=${sort}&offset=${Math.max(0, offset - limit)}&limit=${limit}`}
+                  href={`/techniques?q=${encodeURIComponent(q)}&surface=${surface}&field=${fieldSlug}&sort=${sort}&offset=${Math.max(0, offset - limit)}&limit=${limit}`}
                   className="btn btn-sm"
                 >
                   Previous
@@ -136,7 +171,7 @@ export default async function TechniquesPage({
               )}
               {offset + limit < total && (
                 <Link
-                  href={`/techniques?q=${encodeURIComponent(q)}&surface=${surface}&sort=${sort}&offset=${offset + limit}&limit=${limit}`}
+                  href={`/techniques?q=${encodeURIComponent(q)}&surface=${surface}&field=${fieldSlug}&sort=${sort}&offset=${offset + limit}&limit=${limit}`}
                   className="btn btn-sm"
                 >
                   Next

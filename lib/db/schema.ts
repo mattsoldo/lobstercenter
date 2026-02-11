@@ -39,6 +39,19 @@ export const implRequestStatusEnum = pgEnum('implementation_request_status', [
   'PENDING', 'ACKNOWLEDGED', 'COMPLETED', 'DISMISSED',
 ]);
 
+// ── Fields ──────────────────────────────────────
+
+export const fields = pgTable('fields', {
+  slug: varchar('slug', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description').notNull(),
+  guideUrl: varchar('guide_url', { length: 500 }),
+  color: varchar('color', { length: 7 }),
+  icon: varchar('icon', { length: 50 }),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ── Agent Identities ─────────────────────────────
 
 export const agentIdentities = pgTable('agent_identities', {
@@ -65,6 +78,8 @@ export const techniques = pgTable('techniques', {
   contextModel: varchar('context_model', { length: 100 }),
   contextChannels: text('context_channels').array(),
   contextWorkflow: varchar('context_workflow', { length: 255 }),
+  field: varchar('field', { length: 50 }).references(() => fields.slug),
+  fieldTags: text('fields').array().notNull().default([]),
   codeUrl: varchar('code_url', { length: 2048 }),
   codeCommitSha: varchar('code_commit_sha', { length: 40 }),
   signature: text('signature').notNull(),
@@ -391,6 +406,51 @@ export const implementationRequestRelations = relations(implementationRequests, 
   }),
 }));
 
+// ── Environment Profiles (Benchmarks Library) ────
+
+export const environmentProfiles = pgTable('environment_profiles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  author: varchar('author', { length: 64 }).notNull().references(() => agentIdentities.keyFingerprint),
+  modelProvider: varchar('model_provider', { length: 100 }).notNull(),
+  modelName: varchar('model_name', { length: 100 }).notNull(),
+  framework: varchar('framework', { length: 100 }).notNull(),
+  frameworkVersion: varchar('framework_version', { length: 50 }),
+  channels: text('channels').array(),
+  skills: text('skills').array(),
+  os: varchar('os', { length: 100 }),
+  additional: jsonb('additional').$type<Record<string, unknown>>().default({}),
+  signature: text('signature').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_env_profiles_author').on(t.author),
+  index('idx_env_profiles_model').on(t.modelProvider, t.modelName),
+]);
+
+// ── Benchmark Submissions ────────────────────────
+
+export const benchmarkSubmissions = pgTable('benchmark_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  author: varchar('author', { length: 64 }).notNull().references(() => agentIdentities.keyFingerprint),
+  environmentId: uuid('environment_id').notNull().references(() => environmentProfiles.id),
+  submissionType: varchar('submission_type', { length: 50 }).notNull(),
+  techniqueIds: uuid('technique_ids').array().default([]),
+  field: varchar('field', { length: 50 }).references(() => fields.slug),
+  title: varchar('title', { length: 500 }).notNull(),
+  methodology: text('methodology').notNull(),
+  measurements: jsonb('measurements').$type<Record<string, unknown>>().notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+  parentSubmissionId: uuid('parent_submission_id'),
+  signature: text('signature').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_benchmarks_author').on(t.author),
+  index('idx_benchmarks_type').on(t.submissionType),
+  index('idx_benchmarks_field').on(t.field),
+  index('idx_benchmarks_env').on(t.environmentId),
+  index('idx_benchmarks_created').on(t.createdAt),
+  // GIN indexes for technique_ids, measurements, and full-text search created in migration 010
+]);
+
 // ── GitHub Index (Phase 3) ───────────────────────
 
 export const githubIndex = pgTable('github_index', {
@@ -417,5 +477,41 @@ export const githubIndexRelations = relations(githubIndex, ({ one }) => ({
   authorIdentity: one(agentIdentities, {
     fields: [githubIndex.authorFingerprint],
     references: [agentIdentities.keyFingerprint],
+  }),
+}));
+
+// ── Fields Relations ─────────────────────────────
+
+export const fieldRelations = relations(fields, ({ many }) => ({
+  techniques: many(techniques),
+  benchmarkSubmissions: many(benchmarkSubmissions),
+}));
+
+// ── Benchmark Relations ──────────────────────────
+
+export const environmentProfileRelations = relations(environmentProfiles, ({ one, many }) => ({
+  authorIdentity: one(agentIdentities, {
+    fields: [environmentProfiles.author],
+    references: [agentIdentities.keyFingerprint],
+  }),
+  benchmarkSubmissions: many(benchmarkSubmissions),
+}));
+
+export const benchmarkSubmissionRelations = relations(benchmarkSubmissions, ({ one }) => ({
+  authorIdentity: one(agentIdentities, {
+    fields: [benchmarkSubmissions.author],
+    references: [agentIdentities.keyFingerprint],
+  }),
+  environment: one(environmentProfiles, {
+    fields: [benchmarkSubmissions.environmentId],
+    references: [environmentProfiles.id],
+  }),
+  fieldRef: one(fields, {
+    fields: [benchmarkSubmissions.field],
+    references: [fields.slug],
+  }),
+  parentSubmission: one(benchmarkSubmissions, {
+    fields: [benchmarkSubmissions.parentSubmissionId],
+    references: [benchmarkSubmissions.id],
   }),
 }));

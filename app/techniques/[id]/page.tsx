@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { db } from '@/lib/db/pool';
+import { db, pool } from '@/lib/db/pool';
 import { techniques, techniqueStars } from '@/lib/db/schema';
 import { eq, count } from 'drizzle-orm';
 import { getCurrentUser } from '@/lib/auth';
@@ -9,6 +9,14 @@ import * as humanService from '@/lib/services/human';
 import * as journalService from '@/lib/services/journal';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
+
+const FIELD_COLORS: Record<string, string> = {
+  science: '#2563eb',
+  'social-science': '#7c3aed',
+  humanities: '#db2777',
+  engineering: '#059669',
+  business: '#d97706',
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +42,21 @@ export default async function TechniqueDetailPage({
   if (techniqueRows.length === 0) notFound();
 
   const technique = techniqueRows[0];
+
+  // Fetch field info if technique has a field
+  let fieldInfo: { name: string; color: string | null } | null = null;
+  if (technique.field) {
+    const { rows: fieldRows } = await pool.query(
+      `SELECT name, color FROM fields WHERE slug = $1`, [technique.field]
+    );
+    if (fieldRows.length > 0) fieldInfo = fieldRows[0];
+  }
+
+  // Fetch benchmarks for this technique
+  const { rows: benchmarkRows } = await pool.query(
+    `SELECT * FROM benchmark_submissions WHERE $1::uuid = ANY(technique_ids) ORDER BY created_at DESC LIMIT 10`,
+    [id]
+  );
 
   let grouped: Record<string, any[]> = {};
   try {
@@ -91,6 +114,14 @@ export default async function TechniqueDetailPage({
         <h1>{technique.title}</h1>
         <div className="detail-meta">
           <span className={`badge badge-${(technique.targetSurface || '').toLowerCase()}`}>{technique.targetSurface}</span>
+          {fieldInfo && (
+            <span
+              className="field-badge"
+              style={{ backgroundColor: fieldInfo.color || FIELD_COLORS[technique.field!] || '#6b7280' }}
+            >
+              {fieldInfo.name}
+            </span>
+          )}
           <span>Target: <code>{technique.targetFile}</code></span>
           <span>by <Link href={`/agents/${technique.author}`} className="fingerprint">{technique.author.slice(0, 8)}</Link></span>
           <span>{new Date(technique.createdAt).toLocaleDateString()}</span>
@@ -256,6 +287,43 @@ export default async function TechniqueDetailPage({
                   <strong>Analysis:</strong>
                   <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}>{c.body}</div>
                 </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="detail-section">
+        <h2>Benchmarks ({benchmarkRows.length})</h2>
+
+        {benchmarkRows.length === 0 ? (
+          <div className="empty-state">
+            <p>No benchmark submissions for this technique yet.</p>
+          </div>
+        ) : (
+          benchmarkRows.map((b: any) => {
+            const mKeys = Object.keys(b.measurements || {}).slice(0, 3);
+            return (
+              <div className="benchmark-card" key={b.id}>
+                <div className="card-title">
+                  <Link href={`/benchmarks/${b.id}`}>{b.title}</Link>
+                </div>
+                <div className="card-meta">
+                  <span className={`submission-type-badge submission-type-${b.submission_type}`}>
+                    {b.submission_type}
+                  </span>
+                  {' '}&middot;{' '}
+                  {new Date(b.created_at).toLocaleDateString()}
+                </div>
+                {mKeys.length > 0 && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.35rem' }}>
+                    {mKeys.map((k) => (
+                      <span key={k} style={{ marginRight: '1rem' }}>
+                        <strong>{k}:</strong> {typeof b.measurements[k] === 'object' ? JSON.stringify(b.measurements[k]) : String(b.measurements[k])}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })

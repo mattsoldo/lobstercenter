@@ -19,6 +19,13 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
   --shadow: 0 1px 3px rgba(0,0,0,0.1);
   --max-width: 960px;
+
+  /* Field colors */
+  --color-field-science: #2563eb;
+  --color-field-social-science: #7c3aed;
+  --color-field-humanities: #db2777;
+  --color-field-engineering: #059669;
+  --color-field-business: #d97706;
 }
 
 /* ── Reset ───────────────────────────────────── */
@@ -76,6 +83,79 @@ a:hover { color: var(--color-link-hover); text-decoration: underline; }
   color: var(--color-text-muted);
 }
 .nav-links a:hover { color: var(--color-text); text-decoration: none; }
+
+/* ── Nav Dropdowns ──────────────────────────── */
+.nav-section {
+  position: relative;
+}
+
+.nav-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  cursor: default;
+  padding: 0.25rem 0;
+}
+
+.nav-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0.5rem 0;
+  min-width: 180px;
+  z-index: 200;
+  display: none;
+}
+
+.nav-section:hover .nav-dropdown {
+  display: block;
+}
+
+.nav-dropdown a {
+  display: block;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.nav-dropdown a:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.nav-dropdown-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-dropdown-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.nav-separator {
+  color: var(--color-border);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.nav-auth {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
 
 /* ── Main Content ────────────────────────────── */
 .main-content {
@@ -423,6 +503,269 @@ p + p { margin-top: 0.75rem; }
   text-align: center;
 }
 
+/* ── Hero ────────────────────────────────────── */
+.hero {
+  text-align: center;
+  padding: 2.5rem 1rem 2rem;
+}
+
+.hero h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.hero .tagline {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  max-width: 640px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ── Fields Grid ────────────────────────────── */
+.fields-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.field-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, transform 0.15s;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.field-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: inherit;
+}
+
+.field-card-name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.field-card-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+.field-card-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.field-card-stats span {
+  font-weight: 600;
+}
+
+/* ── Field Badge ────────────────────────────── */
+.field-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Libraries Grid ─────────────────────────── */
+.libraries-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.library-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.library-card-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.library-card h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.library-card p {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* ── How It Works ───────────────────────────── */
+.how-it-works {
+  margin-bottom: 2.5rem;
+}
+
+.how-it-works h2 {
+  text-align: center;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 1rem;
+}
+
+.how-it-works-flow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.how-it-works-step {
+  text-align: center;
+  flex: 0 1 140px;
+}
+
+.how-it-works-step .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.how-it-works-step .step-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.15rem;
+}
+
+.how-it-works-step .step-desc {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.how-it-works-arrow {
+  font-size: 1.25rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* ── Activity Feed ──────────────────────────── */
+.activity-feed {
+  margin-bottom: 2rem;
+}
+
+.activity-feed h2 {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.activity-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.875rem;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-type-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.activity-type-badge.type-technique {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.activity-type-badge.type-journal {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.activity-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Stats Bar ──────────────────────────────── */
+.stats-bar {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  padding: 1.25rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.stats-bar-item {
+  text-align: center;
+}
+
+.stats-bar-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.stats-bar-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Section headings ───────────────────────── */
+.section-heading {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
 /* ── Responsive ──────────────────────────────── */
 @media (max-width: 640px) {
   .nav-container {
@@ -458,4 +801,208 @@ p + p { margin-top: 0.75rem; }
     flex-direction: column;
     gap: 0.25rem;
   }
+
+  .fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .libraries-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .how-it-works-flow {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .how-it-works-arrow {
+    transform: rotate(90deg);
+  }
+
+  .stats-bar {
+    gap: 1rem;
+  }
+
+  /* On mobile, show dropdown as inline links */
+  .nav-section {
+    position: static;
+  }
+
+  .nav-dropdown {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    min-width: auto;
+  }
+
+  .nav-dropdown a {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .nav-section-label {
+    display: none;
+  }
+
+  .nav-auth {
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .fields-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .libraries-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Field Detail Page ─────────────────────── */
+.field-detail-header {
+  border-left: 4px solid var(--color-accent);
+  padding-left: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.field-detail-header h1 {
+  margin-bottom: 0.5rem;
+}
+
+.field-detail-header p {
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.field-stats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.field-stats-bar strong {
+  color: var(--color-text);
+}
+
+.field-section {
+  margin-bottom: 2rem;
+}
+
+.field-section h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.contributors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+/* ── Benchmark Cards ────────────────────────── */
+.benchmark-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.benchmark-card + .benchmark-card { margin-top: 0.75rem; }
+
+/* ── Measurements Table ────────────────────── */
+.measurements-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+}
+
+.measurements-table th,
+.measurements-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.measurements-table th {
+  font-weight: 600;
+  background: #f9fafb;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+}
+
+.measurements-table td:first-child {
+  font-weight: 500;
+  color: var(--color-text);
+  min-width: 180px;
+}
+
+.measurements-table td:last-child {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+/* ── Environment Profile ───────────────────── */
+.environment-profile {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.env-row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  font-size: 0.875rem;
+}
+
+.env-row + .env-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.env-label {
+  font-weight: 600;
+  min-width: 100px;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Submission Type Badges ────────────────── */
+.submission-type-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.submission-type-capability { background: #dbeafe; color: #1e40af; }
+.submission-type-technique-impact { background: #d1fae5; color: #065f46; }
+.submission-type-experimental { background: #ede9fe; color: #5b21b6; }
+
+/* ── Field Expertise ───────────────────────── */
+.field-expertise {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }

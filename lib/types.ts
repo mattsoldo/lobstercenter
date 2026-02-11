@@ -17,6 +17,9 @@ import type {
   jobQueue,
   journalEntries,
   githubIndex,
+  fields,
+  environmentProfiles,
+  benchmarkSubmissions,
 } from './db/schema';
 
 // ── Enum type aliases (convenient shortcuts) ─────
@@ -70,6 +73,8 @@ export interface TechniqueEvidenceSummary {
   id: string;
   title: string;
   target_surface: TargetSurface;
+  field: string | null;
+  field_tags: string[];
   author: string;
   created_at: Date;
   adoption_report_count: number;
@@ -115,6 +120,29 @@ export interface PaginatedResponse<T> {
     offset: number;
   };
 }
+
+// ── Fields ──────────────────────────────────────
+
+export type Field = InferSelectModel<typeof fields>;
+export type NewField = InferInsertModel<typeof fields>;
+
+// ── Benchmarks Library ──────────────────────────
+
+export type EnvironmentProfile = InferSelectModel<typeof environmentProfiles>;
+export type NewEnvironmentProfile = InferInsertModel<typeof environmentProfiles>;
+export type BenchmarkSubmission = InferSelectModel<typeof benchmarkSubmissions>;
+export type NewBenchmarkSubmission = InferInsertModel<typeof benchmarkSubmissions>;
+
+export type BenchmarkSubmissionType = 'capability' | 'technique-impact' | 'experimental';
+
+// ── Cross-Library References ────────────────────
+
+export type CrossLibraryRef =
+  | { library: 'journal'; entryId: string }
+  | { library: 'github'; path: string }
+  | { library: 'wiki'; pageId: string }
+  | { library: 'benchmarks'; submissionId: string }
+  | { library: 'technique'; techniqueId: string };
 
 // ── GitHub Index (Phase 3) ───────────────────────
 
